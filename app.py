@@ -2,24 +2,58 @@ import os
 import streamlit as st
 from groq import Groq
 from ddgs import DDGS
+from datetime import datetime
 
 # Configuração da página
 st.set_page_config(page_title="Minha IA Pessoal", page_icon="🤖", layout="wide")
 
-# --- SIDEBAR (Configurações) ---
+# --- SIDEBAR (Configurações e Histórico) ---
 with st.sidebar:
-    st.title("️ Configurações")
+    st.title("⚙️ Configurações")
 
     # Seleção de Persona
     persona = st.selectbox(
-        "Escolha a personalidade da IA:",
+        "🎭 Personalidade da IA:",
         ["Assistente Padrão", "Professor Didático", "Programador Sênior", "Amigo Informal"]
     )
 
-    # Botão de limpar histórico
-    if st.button("🗑️ Limpar Conversa"):
-        st.session_state.messages = []
+    st.markdown("---")
+    st.subheader(" Conversas")
+
+    # Inicializar lista de conversas
+    if "conversations" not in st.session_state:
+        st.session_state.conversations = []
+
+    if "current_conv_id" not in st.session_state:
+        st.session_state.current_conv_id = None
+
+    # Botão Nova Conversa
+    if st.button("➕ Nova Conversa", use_container_width=True):
+        new_conv = {
+            "id": datetime.now().strftime("%Y%m%d_%H%M%S"),
+            "title": f"Conversa {len(st.session_state.conversations) + 1}",
+            "messages": [],
+            "persona": persona
+        }
+        st.session_state.conversations.append(new_conv)
+        st.session_state.current_conv_id = new_conv["id"]
         st.rerun()
+
+    # Listar conversas existentes
+    if st.session_state.conversations:
+        st.markdown("**Histórico:**")
+        for conv in st.session_state.conversations:
+            col1, col2 = st.columns([4, 1])
+            with col1:
+                if st.button(f"💬 {conv['title']}", key=f"load_{conv['id']}", use_container_width=True):
+                    st.session_state.current_conv_id = conv["id"]
+                    st.rerun()
+            with col2:
+                if st.button("🗑️", key=f"del_{conv['id']}"):
+                    st.session_state.conversations = [c for c in st.session_state.conversations if c["id"] != conv["id"]]
+                    if st.session_state.current_conv_id == conv["id"]:
+                        st.session_state.current_conv_id = None
+                    st.rerun()
 
     st.markdown("---")
     st.caption("Feito com Streamlit + Groq")
@@ -32,18 +66,25 @@ prompts = {
     "Amigo Informal": "Você é um amigo próximo e descontraído. Usa gírias leves, é empático e animado. Fala português brasileiro."
 }
 
-system_prompt = prompts[persona]
-
-# Inicializa o histórico de chat na sessão
-if "messages" not in st.session_state:
+# --- CARREGAR CONVERSA ATUAL ---
+if st.session_state.current_conv_id:
+    current_conv = next((c for c in st.session_state.conversations if c["id"] == st.session_state.current_conv_id), None)
+    if current_conv:
+        st.session_state.messages = current_conv["messages"]
+        system_prompt = prompts[current_conv.get("persona", persona)]
+    else:
+        st.session_state.messages = []
+        system_prompt = prompts[persona]
+else:
     st.session_state.messages = []
+    system_prompt = prompts[persona]
 
-# Mostra o histórico na tela
+# --- EXIBIR CHAT ---
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Função de busca na web
+# --- FUNÇÃO DE BUSCA ---
 def pesquisar_na_web(consulta):
     try:
         with DDGS() as ddgs:
@@ -54,14 +95,33 @@ def pesquisar_na_web(consulta):
     except Exception:
         return "Erro ao buscar na web."
 
-# Campo de digitação
+# --- INPUT DO USUÁRIO ---
 if prompt := st.chat_input("Digite sua mensagem..."):
-    # Mostra a mensagem do usuário
-    with st.chat_message("user"):
-        st.markdown(prompt)
+    # Se não há conversa ativa, criar uma nova
+    if not st.session_state.current_conv_id:
+        new_conv = {
+            "id": datetime.now().strftime("%Y%m%d_%H%M%S"),
+            "title": prompt[:30] + "..." if len(prompt) > 30 else prompt,
+            "messages": [],
+            "persona": persona
+        }
+        st.session_state.conversations.append(new_conv)
+        st.session_state.current_conv_id = new_conv["id"]
+        st.session_state.messages = []
+
+    # Adicionar mensagem do usuário
     st.session_state.messages.append({"role": "user", "content": prompt})
 
-    # Verifica se precisa buscar na web
+    # Atualizar título da conversa se for a primeira mensagem
+    current_conv = next((c for c in st.session_state.conversations if c["id"] == st.session_state.current_conv_id), None)
+    if current_conv and len(current_conv["messages"]) == 0:
+        current_conv["title"] = prompt[:30] + "..." if len(prompt) > 30 else prompt
+
+    # Mostrar mensagem do usuário
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    # Verificar se precisa buscar na web
     palavras_chave = ["quem ganhou", "eleições", "hoje", "atual", "preço", "notícia", "2026", "2025", "resultado", "últimas"]
     precisa_buscar = any(palavra in prompt.lower() for palavra in palavras_chave)
 
@@ -78,13 +138,11 @@ if prompt := st.chat_input("Digite sua mensagem..."):
             Pergunta: {prompt}
             """
 
-    # Gera a resposta da IA
+    # Gerar resposta da IA
     with st.chat_message("assistant"):
         with st.spinner("Pensando..."):
-            # Usando st.secrets (a forma nativa e segura do Streamlit)
             client = Groq(api_key=st.secrets["GROQ_API_KEY"])
-            
-            # Monta a lista de mensagens enviando o system prompt correto da persona
+
             mensagens_envio = [{"role": "system", "content": system_prompt}] + st.session_state.messages[:-1] + [{"role": "user", "content": mensagem_para_ia}]
 
             response = client.chat.completions.create(
@@ -96,4 +154,18 @@ if prompt := st.chat_input("Digite sua mensagem..."):
             resposta = response.choices[0].message.content
             st.markdown(resposta)
 
+            # Auto-scroll via JavaScript
+            st.markdown("""
+            <script>
+            setTimeout(function() {
+                window.scrollTo(0, document.body.scrollHeight);
+            }, 100);
+            </script>
+            """, unsafe_allow_html=True)
+
+    # Salvar resposta no histórico
     st.session_state.messages.append({"role": "assistant", "content": resposta})
+
+    # Atualizar conversa no session_state
+    if current_conv:
+        current_conv["messages"] = st.session_state.messages.copy()
