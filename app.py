@@ -3,6 +3,7 @@ import streamlit as st
 from groq import Groq
 from ddgs import DDGS
 from datetime import datetime
+import html
 
 # Configuração da página
 st.set_page_config(page_title="Minha IA Pessoal", page_icon="🤖", layout="wide")
@@ -17,68 +18,204 @@ if "conversations" not in st.session_state:
 if "current_conv_id" not in st.session_state:
     st.session_state.current_conv_id = None
 
-# --- CSS PARA TEMA ESCURO ---
-if st.session_state.tema == "escuro":
-    st.markdown("""
-    <style>
-    .stApp {
-        background-color: #0E1117;
-        color: #FAFAFA;
-    }
-    .stSidebar {
-        background-color: #161B22;
-    }
-    .stTextInput > div > div > input {
-        background-color: #21262D;
-        color: #FAFAFA;
-    }
-    .stChatMessage {
-        background-color: #161B22;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+# --- CSS COMPLETO PARA TEMAS ---
+CSS_TEMA = """
+<style>
+/* TEMA CLARO */
+body.claro .stApp {
+    background-color: #ffffff;
+    color: #262730;
+}
+body.claro .stSidebar {
+    background-color: #f0f2f6;
+}
+body.claro .stChatMessage {
+    background-color: #f8f9fa;
+}
+body.claro .stTextInput > div > div > input {
+    background-color: #ffffff;
+    color: #262730;
+}
+
+/* TEMA ESCURO */
+body.escuro .stApp {
+    background-color: #0e1117 !important;
+    color: #fafafa !important;
+}
+body.escuro .stSidebar {
+    background-color: #161b22 !important;
+}
+body.escuro .stSidebar .stMarkdown {
+    color: #fafafa !important;
+}
+body.escuro .stSidebar h1, 
+body.escuro .stSidebar h2, 
+body.escuro .stSidebar h3,
+body.escuro .stSidebar p,
+body.escuro .stSidebar label,
+body.escuro .stSidebar span {
+    color: #fafafa !important;
+}
+body.escuro .stChatMessage {
+    background-color: #1c2128 !important;
+    border: 1px solid #30363d !important;
+}
+body.escuro .stChatMessage .stMarkdown {
+    color: #fafafa !important;
+}
+body.escuro .stChatMessage .stMarkdown p {
+    color: #fafafa !important;
+}
+body.escuro .stTextInput > div > div > input {
+    background-color: #21262d !important;
+    color: #fafafa !important;
+    border: 1px solid #30363d !important;
+}
+body.escuro .stSelectbox > div > div > div {
+    background-color: #21262d !important;
+    color: #fafafa !important;
+}
+body.escuro .stButton > button {
+    color: #fafafa !important;
+}
+body.escuro .stButton > button[kind="secondary"] {
+    background-color: #21262d !important;
+    border: 1px solid #30363d !important;
+}
+body.escuro .stButton > button[kind="primary"] {
+    background-color: #ff4b4b !important;
+}
+body.escuro hr {
+    border-color: #30363d !important;
+}
+body.escuro .stCaption {
+    color: #8b949e !important;
+}
+body.escuro .stAlert {
+    background-color: #1c2128 !important;
+    color: #fafafa !important;
+}
+body.escuro .stStatusWidget {
+    background-color: #1c2128 !important;
+}
+body.escuro .stStatusWidget .stMarkdown {
+    color: #fafafa !important;
+}
+
+/* Botões de ação */
+.btn-acao {
+    background: transparent;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.btn-acao:hover {
+    background-color: #f3f4f6;
+    transform: translateY(-1px);
+}
+body.escuro .btn-acao {
+    border-color: #30363d;
+    color: #fafafa;
+}
+body.escuro .btn-acao:hover {
+    background-color: #21262d;
+}
+</style>
+"""
+
+# Aplicar tema
+st.markdown(f'<body class="{st.session_state.tema}"></body>', unsafe_allow_html=True)
+st.markdown(CSS_TEMA, unsafe_allow_html=True)
 
 # --- JAVASCRIPT PARA TTS E COPIAR ---
-st.markdown("""
+JS_FUNCIONALIDADES = """
 <script>
+// Carregar vozes
+let vozesCarregadas = false;
+if (speechSynthesis.onvoiceschanged !== undefined) {
+    speechSynthesis.onvoiceschanged = function() {
+        vozesCarregadas = true;
+    };
+}
+
 function ouvirTexto(texto) {
+    // Decodificar HTML entities
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = texto;
+    const textoLimpo = textarea.value;
+    
+    // Parar qualquer fala anterior
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(texto);
+    
+    const utterance = new SpeechSynthesisUtterance(textoLimpo);
     utterance.lang = 'pt-BR';
     utterance.rate = 1.0;
-    const vozes = window.speechSynthesis.getVoices();
-    const vozPt = vozes.find(v => v.lang.startsWith('pt'));
-    if (vozPt) utterance.voice = vozPt;
-    window.speechSynthesis.speak(utterance);
+    utterance.pitch = 1.0;
+    
+    // Aguardar vozes carregarem
+    const tentarFalar = () => {
+        const vozes = window.speechSynthesis.getVoices();
+        const vozPt = vozes.find(v => v.lang.startsWith('pt'));
+        if (vozPt) {
+            utterance.voice = vozPt;
+            window.speechSynthesis.speak(utterance);
+        } else {
+            // Fallback: tentar qualquer voz
+            window.speechSynthesis.speak(utterance);
+        }
+    };
+    
+    if (vozesCarregadas || window.speechSynthesis.getVoices().length > 0) {
+        tentarFalar();
+    } else {
+        // Aguardar carregamento
+        setTimeout(tentarFalar, 500);
+    }
 }
 
 function copiarTexto(texto, btnId) {
-    navigator.clipboard.writeText(texto).then(() => {
+    // Decodificar HTML entities
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = texto;
+    const textoLimpo = textarea.value;
+    
+    navigator.clipboard.writeText(textoLimpo).then(() => {
         const btn = document.getElementById(btnId);
         if (btn) {
-            btn.innerText = '✓ Copiado!';
-            setTimeout(() => { btn.innerText = '📋 Copiar'; }, 1500);
+            const original = btn.innerHTML;
+            btn.innerHTML = '✓ Copiado!';
+            setTimeout(() => { btn.innerHTML = original; }, 1500);
         }
+    }).catch(err => {
+        console.error('Erro ao copiar:', err);
     });
 }
 </script>
-""", unsafe_allow_html=True)
+"""
+st.markdown(JS_FUNCIONALIDADES, unsafe_allow_html=True)
 
 # --- SIDEBAR ---
 with st.sidebar:
     st.title("⚙️ Configurações")
 
     # Toggle de Tema
-    tema_atual = st.session_state.tema
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("☀️ Claro", use_container_width=True, type="primary" if tema_atual == "claro" else "secondary"):
-            if tema_atual != "claro":
+        if st.button("☀️ Claro", use_container_width=True, 
+                     type="primary" if st.session_state.tema == "claro" else "secondary"):
+            if st.session_state.tema != "claro":
                 st.session_state.tema = "claro"
                 st.rerun()
     with col2:
-        if st.button("🌙 Escuro", use_container_width=True, type="primary" if tema_atual == "escuro" else "secondary"):
-            if tema_atual != "escuro":
+        if st.button(" Escuro", use_container_width=True,
+                     type="primary" if st.session_state.tema == "escuro" else "secondary"):
+            if st.session_state.tema != "escuro":
                 st.session_state.tema = "escuro"
                 st.rerun()
 
@@ -151,7 +288,7 @@ if st.session_state.current_conv_id and current_conv:
     st.caption(f" {current_conv.get('persona', persona)} • 📊 {len(st.session_state.messages)} mensagens")
 else:
     st.title("🤖 Minha IA Pessoal")
-    st.info(" Clique em **Nova Conversa** ou digite sua primeira mensagem abaixo!")
+    st.info("👈 Clique em **Nova Conversa** ou digite sua primeira mensagem abaixo!")
 
 # --- EXIBIR HISTÓRICO ---
 for idx, message in enumerate(st.session_state.messages):
@@ -163,20 +300,21 @@ for idx, message in enumerate(st.session_state.messages):
             st.markdown("---")
             col_btn1, col_btn2 = st.columns(2)
             
+            # Preparar texto para JavaScript (escape HTML)
+            texto_html = html.escape(message["content"])
+            
             # Botão Ouvir
             with col_btn1:
-                texto_limpo = message["content"].replace("'", "\\'").replace('"', '\\"')
                 st.markdown(
-                    f'<button onclick="ouvirTexto(\'{texto_limpo}\')" style="background:none;border:1px solid #ccc;border-radius:4px;padding:4px 12px;cursor:pointer;">🔊 Ouvir</button>',
+                    f'<button class="btn-acao" onclick="ouvirTexto(\'{texto_html}\')">🔊 Ouvir</button>',
                     unsafe_allow_html=True
                 )
             
             # Botão Copiar
             with col_btn2:
                 btn_id = f"copiar_{idx}"
-                texto_escape = message["content"].replace('"', '\\"').replace('\n', '\\n').replace("'", "\\'")
                 st.markdown(
-                    f'<button id="{btn_id}" onclick="copiarTexto(\'{texto_escape}\', \'{btn_id}\')" style="background:none;border:1px solid #ccc;border-radius:4px;padding:4px 12px;cursor:pointer;">📋 Copiar</button>',
+                    f'<button class="btn-acao" id="{btn_id}" onclick="copiarTexto(\'{texto_html}\', \'{btn_id}\')">📋 Copiar</button>',
                     unsafe_allow_html=True
                 )
 
