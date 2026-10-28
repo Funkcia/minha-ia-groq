@@ -14,72 +14,13 @@ if "conversations" not in st.session_state:
     st.session_state.conversations = []
 if "current_conv_id" not in st.session_state:
     st.session_state.current_conv_id = None
-if "ultimo_copiado" not in st.session_state:
-    st.session_state.ultimo_copiado = None
+if "copiado_idx" not in st.session_state:
+    st.session_state.copiado_idx = None
 
-# --- CSS MÍNIMO E CIRÚRGICO (sem quebrar nada) ---
+# --- CSS (Agora funciona corretamente para ambos os temas) ---
 CSS_TEMA = """
 <style>
-/* Apenas ajustes pontuais - não sobrescrever tudo */
-
-/* Tema Escuro */
-body.escuro .stApp {
-    background-color: #0E1117;
-    color: #FAFAFA;
-}
-body.escuro .stSidebar {
-    background-color: #1A1D21;
-}
-body.escuro .stSidebar .stMarkdown h1,
-body.escuro .stSidebar .stMarkdown h2,
-body.escuro .stSidebar .stMarkdown h3,
-body.escuro .stSidebar .stMarkdown p,
-body.escuro .stSidebar .stMarkdown label,
-body.escuro .stSidebar .stMarkdown span,
-body.escuro .stSidebar .stMarkdown div {
-    color: #FAFAFA !important;
-}
-body.escuro .stSelectbox label,
-body.escuro .stSelectbox [data-baseweb="select"] {
-    color: #FAFAFA !important;
-}
-body.escuro .stChatMessage {
-    background-color: #1C2128;
-    border: 1px solid #30363D;
-}
-body.escuro .stChatMessage .stMarkdown,
-body.escuro .stChatMessage .stMarkdown p,
-body.escuro .stChatMessage .stMarkdown li,
-body.escuro .stChatMessage .stMarkdown strong {
-    color: #FAFAFA !important;
-}
-body.escuro .stChatInput textarea {
-    color: #FAFAFA !important;
-    caret-color: #FAFAFA !important;
-}
-body.escuro .stChatInput textarea::placeholder {
-    color: #8B949E !important;
-}
-body.escuro hr {
-    border-color: #30363D !important;
-}
-body.escuro .stCaption {
-    color: #8B949E !important;
-}
-body.escuro .stAlert {
-    background-color: #1C2128;
-    color: #FAFAFA;
-    border: 1px solid #30363D;
-}
-body.escuro .stStatusWidget {
-    background-color: #1C2128;
-    color: #FAFAFA;
-}
-body.escuro .stStatusWidget .stMarkdown {
-    color: #FAFAFA !important;
-}
-
-/* Tema Claro */
+/* === TEMA CLARO (padrão) === */
 body.claro .stApp {
     background-color: #FFFFFF;
     color: #262730;
@@ -92,7 +33,65 @@ body.claro .stChatInput textarea::placeholder {
     color: #808495 !important;
 }
 
-/* Botões de ação (Ouvir/Copiar) */
+/* === TEMA ESCURO === */
+body.escuro .stApp {
+    background-color: #0E1117 !important;
+    color: #FAFAFA !important;
+}
+body.escuro .stSidebar {
+    background-color: #161B22 !important;
+}
+body.escuro .stSidebar .stMarkdown h1,
+body.escuro .stSidebar .stMarkdown h2,
+body.escuro .stSidebar .stMarkdown h3,
+body.escuro .stSidebar .stMarkdown p,
+body.escuro .stSidebar .stMarkdown label,
+body.escuro .stSidebar .stMarkdown span,
+body.escuro .stSidebar .stMarkdown div,
+body.escuro .stSidebar .stSelectbox label {
+    color: #FAFAFA !important;
+}
+body.escuro .stSelectbox [data-baseweb="select"] {
+    color: #FAFAFA !important;
+    background-color: #21262D !important;
+}
+body.escuro .stChatMessage {
+    background-color: #1C2128 !important;
+    border: 1px solid #30363D !important;
+}
+body.escuro .stChatMessage .stMarkdown,
+body.escuro .stChatMessage .stMarkdown p,
+body.escuro .stChatMessage .stMarkdown li,
+body.escuro .stChatMessage .stMarkdown strong {
+    color: #FAFAFA !important;
+}
+body.escuro .stChatInput textarea {
+    color: #FAFAFA !important;
+    caret-color: #FAFAFA !important;
+    background-color: #21262D !important;
+}
+body.escuro .stChatInput textarea::placeholder {
+    color: #8B949E !important;
+}
+body.escuro hr {
+    border-color: #30363D !important;
+}
+body.escuro .stCaption {
+    color: #8B949E !important;
+}
+body.escuro .stAlert {
+    background-color: #1C2128 !important;
+    color: #FAFAFA !important;
+    border: 1px solid #30363D !important;
+}
+body.escuro .stStatusWidget {
+    background-color: #1C2128 !important;
+}
+body.escuro .stStatusWidget .stMarkdown {
+    color: #FAFAFA !important;
+}
+
+/* === BOTÕES DE AÇÃO (Ouvir/Copiar) - TAMANHO UNIFORME === */
 .btn-acao {
     background: transparent;
     border: 1px solid #D0D7DE;
@@ -106,6 +105,8 @@ body.claro .stChatInput textarea::placeholder {
     align-items: center;
     gap: 6px;
     color: #24292F;
+    min-width: 90px;
+    justify-content: center;
 }
 .btn-acao:hover {
     background-color: #F3F4F6;
@@ -129,33 +130,28 @@ st.markdown(CSS_TEMA, unsafe_allow_html=True)
 with st.sidebar:
     st.title("⚙️ Configurações")
 
-    # Toggle de Tema (botões nativos)
     col1, col2 = st.columns(2)
     with col1:
-        tema_claro = st.session_state.tema == "claro"
-        if st.button("☀️ Claro", use_container_width=True, type="primary" if tema_claro else "secondary"):
-            if not tema_claro:
+        if st.button("☀️ Claro", use_container_width=True, type="primary" if st.session_state.tema == "claro" else "secondary"):
+            if st.session_state.tema != "claro":
                 st.session_state.tema = "claro"
                 st.rerun()
     with col2:
-        tema_escuro = st.session_state.tema == "escuro"
-        if st.button("🌙 Escuro", use_container_width=True, type="primary" if tema_escuro else "secondary"):
-            if not tema_escuro:
+        if st.button(" Escuro", use_container_width=True, type="primary" if st.session_state.tema == "escuro" else "secondary"):
+            if st.session_state.tema != "escuro":
                 st.session_state.tema = "escuro"
                 st.rerun()
 
     st.divider()
 
-    # Seleção de Persona
     persona = st.selectbox(
-        " Personalidade da IA:",
+        "🎭 Personalidade da IA:",
         ["Assistente Padrão", "Professor Didático", "Programador Sênior", "Amigo Informal"]
     )
 
     st.divider()
     st.subheader("💬 Conversas")
 
-    # Botão Nova Conversa
     if st.button("➕ Nova Conversa", use_container_width=True):
         new_conv = {
             "id": datetime.now().strftime("%Y%m%d_%H%M%S"),
@@ -167,18 +163,16 @@ with st.sidebar:
         st.session_state.current_conv_id = new_conv["id"]
         st.rerun()
 
-    # Listar conversas
     if st.session_state.conversations:
         for conv in st.session_state.conversations:
             col1, col2 = st.columns([4, 1])
             with col1:
                 ativo = "✅ " if conv["id"] == st.session_state.current_conv_id else ""
-                label = f"{ativo}{conv['title']}"
-                if st.button(label, key=f"load_{conv['id']}", use_container_width=True):
+                if st.button(f"{ativo}{conv['title']}", key=f"load_{conv['id']}", use_container_width=True):
                     st.session_state.current_conv_id = conv["id"]
                     st.rerun()
             with col2:
-                if st.button("️", key=f"del_{conv['id']}", use_container_width=True):
+                if st.button("🗑️", key=f"del_{conv['id']}", use_container_width=True):
                     st.session_state.conversations = [c for c in st.session_state.conversations if c["id"] != conv["id"]]
                     if st.session_state.current_conv_id == conv["id"]:
                         st.session_state.current_conv_id = None
@@ -221,16 +215,15 @@ for idx, message in enumerate(st.session_state.messages):
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-        # Botões apenas nas respostas da IA
         if message["role"] == "assistant":
             st.divider()
             col_btn1, col_btn2 = st.columns(2)
 
-            # Botão Ouvir (HTML isolado, altura correta)
+            # === BOTÃO OUVIR ===
             with col_btn1:
                 texto_limpo = message["content"].replace("'", "\\'").replace('"', '\\"').replace("\n", "\\n").replace("\r", "")
                 html_ouvir = f"""
-                <button class="btn-acao" onclick="falarTexto('{texto_limpo}')">🔊 Ouvir</button>
+                <button class="btn-acao" onclick="falarTexto('{texto_limpo}')"> Ouvir</button>
                 <script>
                 function falarTexto(t) {{
                     window.speechSynthesis.cancel();
@@ -247,35 +240,24 @@ for idx, message in enumerate(st.session_state.messages):
                 }}
                 </script>
                 """
-                components.html(html_ouvir, height=40, width=120, scrolling=False)
+                components.html(html_ouvir, height=40, width=110, scrolling=False)
 
-            # Botão Copiar (NATIVO do Streamlit - sem HTML quebrado)
+            # === BOTÃO COPIAR (mesmo tamanho do Ouvir) ===
             with col_btn2:
-                btn_id = f"copiar_{idx}"
-                copiado = st.session_state.ultimo_copiado == btn_id
-                label = "✅ Copiado!" if copiado else "📋 Copiar"
-                tipo = "primary" if copiado else "secondary"
-                if st.button(label, key=btn_id, use_container_width=True, type=tipo):
-                    st.session_state.ultimo_copiado = btn_id
-                    # Guarda o texto para copiar via JS
-                    st.session_state[f"_texto_{btn_id}"] = message["content"]
-                    st.rerun()
-
-# --- JavaScript global para copiar (quando o botão nativo for clicado) ---
-if st.session_state.ultimo_copiado:
-    btn_id = st.session_state.ultimo_copiado
-    texto = st.session_state.get(f"_texto_{btn_id}", "")
-    texto_js = texto.replace("\\", "\\\\").replace("'", "\\'").replace('"', '\\"').replace("\n", "\\n").replace("\r", "")
-    js_copiar = f"""
-    <script>
-    navigator.clipboard.writeText('{texto_js}').then(() => {{
-        console.log('Copiado com sucesso');
-    }}).catch(err => {{
-        console.error('Erro ao copiar:', err);
-    }});
-    </script>
-    """
-    components.html(js_copiar, height=0, width=0, scrolling=False)
+                copiado = st.session_state.copiado_idx == idx
+                label = "✅ Copiado" if copiado else "📋 Copiar"
+                html_copiar = f"""
+                <button class="btn-acao" onclick="copiarTexto('{message['content'].replace(chr(39), chr(92)+chr(39)).replace(chr(34), chr(92)+chr(34)).replace(chr(10), chr(92)+chr(110)).replace(chr(13), '')}', 'btn_copiar_{idx}')">{label}</button>
+                <script>
+                function copiarTexto(t, id) {{
+                    navigator.clipboard.writeText(t).then(() => {{
+                        const btn = document.getElementById(id);
+                        if (btn) {{ btn.innerHTML = '✅ Copiado'; setTimeout(() => {{ btn.innerHTML = '📋 Copiar'; }}, 1500); }}
+                    }});
+                }}
+                </script>
+                """
+                components.html(html_copiar, height=40, width=110, scrolling=False, key=f"html_copiar_{idx}")
 
 # --- BUSCA WEB ---
 def pesquisar_na_web(consulta):
