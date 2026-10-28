@@ -138,4 +138,105 @@ with st.sidebar:
         for conv in st.session_state.conversations:
             col1, col2 = st.columns([4, 1])
             with col1:
-                ativo = "✅ " if conv
+                ativo = "✅ " if conv["id"] == st.session_state.current_conv_id else ""
+                if st.button(f"{ativo}{conv['title']}", key=f"load_{conv['id']}", use_container_width=True):
+                    st.session_state.current_conv_id = conv["id"]
+                    st.rerun()
+            with col2:
+                if st.button("🗑️", key=f"del_{conv['id']}"):
+                    st.session_state.conversations = [c for c in st.session_state.conversations if c["id"] != conv["id"]]
+                    if st.session_state.current_conv_id == conv["id"]: st.session_state.current_conv_id = None
+                    st.rerun()
+    st.markdown("---")
+    st.caption("Feito com Streamlit + Groq ")
+
+# --- PROMPTS ---
+prompts = {
+    "Assistente Padrão": "Você é um assistente útil, direto e fala português brasileiro.",
+    "Professor Didático": "Você é um professor paciente e didático. Explica conceitos complexos de forma simples. Fala português brasileiro.",
+    "Programador Sênior": "Você é um engenheiro de software sênior. Foca em código limpo e boas práticas. Fala português brasileiro.",
+    "Amigo Informal": "Você é um amigo próximo e descontraído. Usa gírias leves, é empático. Fala português brasileiro."
+}
+
+# --- CARREGAR CONVERSA ---
+if st.session_state.current_conv_id:
+    current_conv = next((c for c in st.session_state.conversations if c["id"] == st.session_state.current_conv_id), None)
+    if current_conv:
+        st.session_state.messages = current_conv["messages"]
+        system_prompt = prompts[current_conv.get("persona", persona)]
+    else:
+        st.session_state.messages = []
+        system_prompt = prompts[persona]
+else:
+    st.session_state.messages = []
+    system_prompt = prompts[persona]
+
+# --- TÍTULO ---
+if st.session_state.current_conv_id and current_conv:
+    st.title(f"💬 {current_conv['title']}")
+    st.caption(f"🎭 {current_conv.get('persona', persona)} • 📊 {len(st.session_state.messages)} mensagens")
+else:
+    st.title("🤖 Minha IA Pessoal")
+    st.info("👈 Clique em **Nova Conversa** ou digite sua primeira mensagem abaixo!")
+
+# --- EXIBIR HISTÓRICO ---
+for idx, message in enumerate(st.session_state.messages):
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+        
+        if message["role"] == "assistant":
+            st.markdown("---")
+            col_btn1, col_btn2 = st.columns(2)
+            with col_btn1:
+                criar_botao_ouvir(message["content"])
+            with col_btn2:
+                criar_botao_copiar(message["content"], idx)
+
+# --- BUSCA WEB ---
+def pesquisar_na_web(consulta):
+    try:
+        with DDGS() as ddgs:
+            resultados = list(ddgs.text(consulta, max_results=3))
+            if resultados: return "\n".join([f"- {r['title']}: {r['body']}" for r in resultados])
+            return "Nenhuma informação recente encontrada."
+    except Exception: return "Erro ao buscar na web."
+
+# --- INPUT ---
+if prompt := st.chat_input("Digite sua mensagem..."):
+    if not st.session_state.current_conv_id:
+        new_conv = {"id": datetime.now().strftime("%Y%m%d_%H%M%S"), "title": prompt[:30] + "..." if len(prompt) > 30 else prompt, "messages": [], "persona": persona}
+        st.session_state.conversations.append(new_conv)
+        st.session_state.current_conv_id = new_conv["id"]
+        st.session_state.messages = []
+        st.rerun()
+
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    current_conv = next((c for c in st.session_state.conversations if c["id"] == st.session_state.current_conv_id), None)
+    if current_conv and len(current_conv["messages"]) == 0:
+        current_conv["title"] = prompt[:30] + "..." if len(prompt) > 30 else prompt
+
+    with st.chat_message("user"): st.markdown(prompt)
+
+    palavras_chave = ["quem ganhou", "eleições", "hoje", "atual", "preço", "notícia", "2026", "2025", "resultado", "últimas", "quanto está", "cotação"]
+    precisa_buscar = any(palavra in prompt.lower() for palavra in palavras_chave)
+
+    mensagem_para_ia = prompt
+    if precisa_buscar:
+        with st.status("🔍 Buscando informações atualizadas na web...", expanded=True) as status:
+            contexto = pesquisar_na_web(prompt)
+            st.write("Dados encontrados!")
+            status.update(label="✅ Busca concluída!", state="complete", expanded=False)
+            mensagem_para_ia = f"Use este contexto da web para responder:\n{contexto}\n\nPergunta: {prompt}"
+
+    with st.chat_message("assistant"):
+        with st.spinner(" Pensando..."):
+            client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+            mensagens_envio = [{"role": "system", "content": system_prompt}] + st.session_state.messages[:-1] + [{"role": "user", "content": mensagem_para_ia}]
+            response = client.chat.completions.create(model="openai/gpt-oss-120b", messages=mensagens_envio, temperature=0.7, max_tokens=1024)
+            resposta = response.choices[0].message.content
+            st.markdown(resposta)
+            st.markdown("<script>setTimeout(() => window.scrollTo({top: document.body.scrollHeight, behavior: 'smooth'}), 300);</script>", unsafe_allow_html=True)
+
+    st.session_state.messages.append({"role": "assistant", "content": resposta})
+    if current_conv: current_conv["messages"] = st.session_state.messages.copy()
+    st.rerun()
