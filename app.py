@@ -7,16 +7,39 @@ import streamlit.components.v1 as components
 # Configuração da página
 st.set_page_config(page_title="Minha IA Pessoal", page_icon="🤖", layout="wide")
 
+# --- DETECTA O TEMA ATUAL PELA URL (nativo do Streamlit) ---
+tema = st.query_params.get("__theme", "dark")  # padrão: escuro
+
+# Cores dos botões isoladas conforme o tema
+if tema == "light":
+    COR_TEXTO_BTN, COR_BORDA_BTN = "#24292f", "#d0d7de"
+else:
+    COR_TEXTO_BTN, COR_BORDA_BTN = "#c9d1d9", "#30363d"
+
 # --- ESTADO INICIAL ---
 if "conversations" not in st.session_state:
     st.session_state.conversations = []
 if "current_conv_id" not in st.session_state:
     st.session_state.current_conv_id = None
 
-# --- CSS LEVE (só ajuste fino dos botões isolados) ---
+# --- CSS DOS BOTÕES DE TEMA (funciona nos dois temas) ---
 st.markdown("""
 <style>
-/* Deixa as bolhas de chat com cantos arredondados e espaçamento bonito */
+.btn-tema {
+    display: inline-block;
+    padding: 6px 14px;
+    margin-right: 6px;
+    border: 1px solid #888;
+    border-radius: 8px;
+    text-decoration: none;
+    font-size: 14px;
+    color: inherit !important;
+}
+.btn-tema.ativo {
+    background: rgba(255, 75, 75, 0.15);
+    border-color: #FF4B4B;
+    font-weight: bold;
+}
 .stChatMessage { border-radius: 12px; }
 </style>
 """, unsafe_allow_html=True)
@@ -25,6 +48,13 @@ st.markdown("""
 with st.sidebar:
     st.title("⚙️ Configurações")
 
+    # Botões de tema (links nativos que recarregam com o tema escolhido)
+    st.markdown(f"""
+    <a class="btn-tema {'ativo' if tema == 'light' else ''}" href="?__theme=light">☀️ Claro</a>
+    <a class="btn-tema {'ativo' if tema == 'dark' else ''}" href="?__theme=dark">🌙 Escuro</a>
+    """, unsafe_allow_html=True)
+
+    st.divider()
     persona = st.selectbox("🎭 Personalidade da IA:", ["Assistente Padrão", "Professor Didático", "Programador Sênior", "Amigo Informal"])
 
     st.divider()
@@ -114,7 +144,7 @@ for idx, message in enumerate(st.session_state.messages):
                 texto_escape = message["content"].replace("'", "\\'").replace('"', '\\"').replace("\n", "\\n").replace("\r", "")
                 html_ouvir = f"""
                 <style>body {{ margin: 0; padding: 0; background: transparent; }}</style>
-                <button style="background:transparent; border:1px solid #30363d; border-radius:6px; padding:8px 16px; cursor:pointer; font-size:14px; width:100%; color:#c9d1d9;" onclick="falar()">🔊 Ouvir</button>
+                <button style="background:transparent; border:1px solid {COR_BORDA_BTN}; border-radius:6px; padding:8px 16px; cursor:pointer; font-size:14px; width:100%; color:{COR_TEXTO_BTN};" onclick="falar()">🔊 Ouvir</button>
                 <script>
                 function falar() {{
                     window.speechSynthesis.cancel();
@@ -134,7 +164,7 @@ for idx, message in enumerate(st.session_state.messages):
                 texto_escape = message["content"].replace("'", "\\'").replace('"', '\\"').replace("\n", "\\n").replace("\r", "")
                 html_copiar = f"""
                 <style>body {{ margin: 0; padding: 0; background: transparent; }}</style>
-                <button id="btn" style="background:transparent; border:1px solid #30363d; border-radius:6px; padding:8px 16px; cursor:pointer; font-size:14px; width:100%; color:#c9d1d9;" onclick="copiar()">📋 Copiar</button>
+                <button id="btn" style="background:transparent; border:1px solid {COR_BORDA_BTN}; border-radius:6px; padding:8px 16px; cursor:pointer; font-size:14px; width:100%; color:{COR_TEXTO_BTN};" onclick="copiar()">📋 Copiar</button>
                 <script>
                 function copiar() {{
                     navigator.clipboard.writeText('{texto_escape}').then(() => {{
