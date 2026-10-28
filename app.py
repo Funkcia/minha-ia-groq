@@ -257,7 +257,7 @@ for idx, message in enumerate(st.session_state.messages):
                 }}
                 </script>
                 """
-                components.html(html_copiar, height=40, width=110, scrolling=False, key=f"html_copiar_{idx}")
+                components.html(html_copiar, height=40, width=110, scrolling=False)
 
 # --- BUSCA WEB ---
 def pesquisar_na_web(consulta):
