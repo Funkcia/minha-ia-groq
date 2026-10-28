@@ -7,125 +7,6 @@ from datetime import datetime
 # Configuração da página
 st.set_page_config(page_title="Minha IA Pessoal", page_icon="🤖", layout="wide")
 
-# --- CSS PERSONALIZADO (Temas) ---
-CSS_TEMA = """
-<style>
-/* Tema Claro (padrão) */
-body.light {
-    background-color: #ffffff;
-    color: #31333F;
-}
-
-/* Tema Escuro */
-body.dark, .stApp.dark {
-    background-color: #0E1117;
-    color: #FAFAFA;
-}
-
-/* Botão de ouvir */
-.btn-ouvir {
-    background: none;
-    border: 1px solid #ccc;
-    border-radius: 50%;
-    width: 28px;
-    height: 28px;
-    cursor: pointer;
-    font-size: 14px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    margin-left: 8px;
-    transition: all 0.2s;
-}
-.btn-ouvir:hover {
-    background-color: #f0f0f0;
-    transform: scale(1.1);
-}
-
-/* Botão copiar */
-.btn-copiar {
-    background: none;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    padding: 2px 8px;
-    cursor: pointer;
-    font-size: 12px;
-    margin-left: 8px;
-}
-.btn-copiar:hover {
-    background-color: #f0f0f0;
-}
-
-/* Ajustes para tema escuro */
-.dark .btn-ouvir, .dark .btn-copiar {
-    border-color: #555;
-    color: #fff;
-}
-.dark .btn-ouvir:hover, .dark .btn-copiar:hover {
-    background-color: #333;
-}
-
-/* Esconder barra de rolagem feia */
-::-webkit-scrollbar {
-    width: 8px;
-}
-::-webkit-scrollbar-track {
-    background: transparent;
-}
-::-webkit-scrollbar-thumb {
-    background: #888;
-    border-radius: 4px;
-}
-</style>
-"""
-
-# --- JAVASCRIPT PARA TTS E COPIAR ---
-JS_FUNCIONALIDADES = """
-<script>
-function ouvirTexto(texto) {
-    // Para qualquer fala anterior
-    window.speechSynthesis.cancel();
-    
-    const utterance = new SpeechSynthesisUtterance(texto);
-    utterance.lang = 'pt-BR';
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
-    
-    // Tenta usar voz em português
-    const vozes = window.speechSynthesis.getVoices();
-    const vozPt = vozes.find(v => v.lang.startsWith('pt'));
-    if (vozPt) utterance.voice = vozPt;
-    
-    window.speechSynthesis.speak(utterance);
-}
-
-function pararFala() {
-    window.speechSynthesis.cancel();
-}
-
-function copiarTexto(texto, btnId) {
-    navigator.clipboard.writeText(texto).then(() => {
-        const btn = document.getElementById(btnId);
-        if (btn) {
-            const original = btn.innerText;
-            btn.innerText = '✓ Copiado!';
-            setTimeout(() => { btn.innerText = original; }, 1500);
-        }
-    });
-}
-
-function rolarParaBaixo() {
-    setTimeout(() => {
-        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-    }, 200);
-}
-</script>
-"""
-
-# Injetar CSS e JS
-st.markdown(CSS_TEMA, unsafe_allow_html=True)
-st.markdown(JS_FUNCIONALIDADES, unsafe_allow_html=True)
-
 # --- ESTADO INICIAL ---
 if "tema" not in st.session_state:
     st.session_state.tema = "claro"
@@ -136,31 +17,70 @@ if "conversations" not in st.session_state:
 if "current_conv_id" not in st.session_state:
     st.session_state.current_conv_id = None
 
+# --- CSS PARA TEMA ESCURO ---
+if st.session_state.tema == "escuro":
+    st.markdown("""
+    <style>
+    .stApp {
+        background-color: #0E1117;
+        color: #FAFAFA;
+    }
+    .stSidebar {
+        background-color: #161B22;
+    }
+    .stTextInput > div > div > input {
+        background-color: #21262D;
+        color: #FAFAFA;
+    }
+    .stChatMessage {
+        background-color: #161B22;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- JAVASCRIPT PARA TTS E COPIAR ---
+st.markdown("""
+<script>
+function ouvirTexto(texto) {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(texto);
+    utterance.lang = 'pt-BR';
+    utterance.rate = 1.0;
+    const vozes = window.speechSynthesis.getVoices();
+    const vozPt = vozes.find(v => v.lang.startsWith('pt'));
+    if (vozPt) utterance.voice = vozPt;
+    window.speechSynthesis.speak(utterance);
+}
+
+function copiarTexto(texto, btnId) {
+    navigator.clipboard.writeText(texto).then(() => {
+        const btn = document.getElementById(btnId);
+        if (btn) {
+            btn.innerText = '✓ Copiado!';
+            setTimeout(() => { btn.innerText = '📋 Copiar'; }, 1500);
+        }
+    });
+}
+</script>
+""", unsafe_allow_html=True)
+
 # --- SIDEBAR ---
 with st.sidebar:
     st.title("⚙️ Configurações")
 
     # Toggle de Tema
     tema_atual = st.session_state.tema
-    novo_tema = st.radio(
-        "🎨 Tema:",
-        ["️ Claro", "🌙 Escuro"],
-        index=0 if tema_atual == "claro" else 1,
-        horizontal=True,
-        label_visibility="collapsed"
-    )
-    if "Escuro" in novo_tema and tema_atual != "escuro":
-        st.session_state.tema = "escuro"
-        st.rerun()
-    elif "Claro" in novo_tema and tema_atual != "claro":
-        st.session_state.tema = "claro"
-        st.rerun()
-
-    # Aplicar tema via CSS
-    if st.session_state.tema == "escuro":
-        st.markdown('<body class="dark"></body>', unsafe_allow_html=True)
-    else:
-        st.markdown('<body class="light"></body>', unsafe_allow_html=True)
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("☀️ Claro", use_container_width=True, type="primary" if tema_atual == "claro" else "secondary"):
+            if tema_atual != "claro":
+                st.session_state.tema = "claro"
+                st.rerun()
+    with col2:
+        if st.button("🌙 Escuro", use_container_width=True, type="primary" if tema_atual == "escuro" else "secondary"):
+            if tema_atual != "escuro":
+                st.session_state.tema = "escuro"
+                st.rerun()
 
     st.markdown("---")
 
@@ -171,7 +91,7 @@ with st.sidebar:
     )
 
     st.markdown("---")
-    st.subheader(" Conversas")
+    st.subheader("💬 Conversas")
 
     # Botão Nova Conversa
     if st.button("➕ Nova Conversa", use_container_width=True):
@@ -228,31 +148,35 @@ else:
 # --- TÍTULO DO CHAT ---
 if st.session_state.current_conv_id and current_conv:
     st.title(f"💬 {current_conv['title']}")
-    st.caption(f"🎭 {current_conv.get('persona', persona)} • 📊 {len(st.session_state.messages)} mensagens")
+    st.caption(f" {current_conv.get('persona', persona)} • 📊 {len(st.session_state.messages)} mensagens")
 else:
     st.title("🤖 Minha IA Pessoal")
-    st.info("👈 Clique em **Nova Conversa** ou digite sua primeira mensagem abaixo!")
+    st.info(" Clique em **Nova Conversa** ou digite sua primeira mensagem abaixo!")
 
 # --- EXIBIR HISTÓRICO ---
 for idx, message in enumerate(st.session_state.messages):
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
         
-        # Adicionar botões apenas nas respostas da IA
+        # Botões apenas nas respostas da IA
         if message["role"] == "assistant":
-            col_btn1, col_btn2 = st.columns([1, 1])
+            st.markdown("---")
+            col_btn1, col_btn2 = st.columns(2)
+            
+            # Botão Ouvir
             with col_btn1:
-                btn_id_ouvir = f"ouvir_{idx}"
+                texto_limpo = message["content"].replace("'", "\\'").replace('"', '\\"')
                 st.markdown(
-                    f'<button class="btn-ouvir" onclick="ouvirTexto(this.parentElement.parentElement.querySelector(\'div[data-testid="stMarkdownContainer"]\').innerText)" id="{btn_id_ouvir}"> Ouvir</button>',
+                    f'<button onclick="ouvirTexto(\'{texto_limpo}\')" style="background:none;border:1px solid #ccc;border-radius:4px;padding:4px 12px;cursor:pointer;">🔊 Ouvir</button>',
                     unsafe_allow_html=True
                 )
+            
+            # Botão Copiar
             with col_btn2:
-                btn_id_copiar = f"copiar_{idx}"
-                # Escapa aspas para o JavaScript
-                texto_escape = message["content"].replace('"', '\\"').replace('\n', '\\n')
+                btn_id = f"copiar_{idx}"
+                texto_escape = message["content"].replace('"', '\\"').replace('\n', '\\n').replace("'", "\\'")
                 st.markdown(
-                    f'<button class="btn-copiar" onclick="copiarTexto(\\"{texto_escape}\\", \\"{btn_id_copiar}\\")" id="{btn_id_copiar}">📋 Copiar</button>',
+                    f'<button id="{btn_id}" onclick="copiarTexto(\'{texto_escape}\', \'{btn_id}\')" style="background:none;border:1px solid #ccc;border-radius:4px;padding:4px 12px;cursor:pointer;">📋 Copiar</button>',
                     unsafe_allow_html=True
                 )
 
@@ -321,7 +245,7 @@ if prompt := st.chat_input("Digite sua mensagem..."):
             resposta = response.choices[0].message.content
             st.markdown(resposta)
 
-            # Auto-scroll suave
+            # Auto-scroll
             st.markdown("<script>setTimeout(() => window.scrollTo({top: document.body.scrollHeight, behavior: 'smooth'}), 300);</script>", unsafe_allow_html=True)
 
     # Salvar resposta
