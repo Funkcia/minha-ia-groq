@@ -8,126 +8,25 @@ import streamlit.components.v1 as components
 st.set_page_config(page_title="Minha IA Pessoal", page_icon="🤖", layout="wide")
 
 # --- ESTADO INICIAL ---
-if "tema" not in st.session_state:
-    st.session_state.tema = "claro"
 if "conversations" not in st.session_state:
     st.session_state.conversations = []
 if "current_conv_id" not in st.session_state:
     st.session_state.current_conv_id = None
 
-# --- CORES DOS BOTÕES ISOLADOS (baseadas no tema) ---
-if st.session_state.tema == "escuro":
-    COR_TEXTO_BTN = "#c9d1d9"
-    COR_BORDA_BTN = "#30363d"
-else:
-    COR_TEXTO_BTN = "#24292f"
-    COR_BORDA_BTN = "#d0d7de"
-
-# --- CSS TEMA ESCURO COMPLETO ---
-if st.session_state.tema == "escuro":
-    st.markdown("""
-    <style>
-    /* Fundo geral - cobre TODOS os containers */
-    .stApp, .stApp > div, .main, .block-container,
-    [data-testid="stAppViewContainer"], [data-testid="stMain"],
-    [data-testid="stChatInputContainer"], [data-testid="stChatInput"] {
-        background-color: #0e1117 !important;
-    }
-    .stApp { color: #fafafa !important; }
-
-    /* Sidebar */
-    .stSidebar, .stSidebar [data-testid="stSidebarContent"] {
-        background-color: #161b22 !important;
-    }
-    .stSidebar * { color: #fafafa !important; }
-
-    /* Chat Messages */
-    .stChatMessage {
-        background-color: #1c2128 !important;
-        border: 1px solid #30363d !important;
-    }
-    .stChatMessage * { color: #fafafa !important; }
-
-    /* CORREÇÃO 1: Selectbox (Personalidade) - fundo escuro e texto visível */
-    .stSelectbox [data-baseweb="select"],
-    .stSelectbox [data-baseweb="select"] * {
-        background-color: #21262d !important;
-        color: #fafafa !important;
-    }
-
-    /* CORREÇÃO 2: Caixa de digitação - remove o fundo branco ao redor */
-    .stChatInput, .stChatInput > div, .stChatInput > div > div {
-        background-color: #0e1117 !important;
-    }
-    .stChatInput textarea {
-        background-color: #21262d !important;
-        color: #fafafa !important;
-        caret-color: #fafafa !important;
-    }
-    .stChatInput textarea::placeholder {
-        color: #9da5b0 !important;
-    }
-
-    /* Botões nativos */
-    .stButton > button {
-        background-color: #21262d !important;
-        color: #fafafa !important;
-        border: 1px solid #30363d !important;
-    }
-    .stButton > button:hover { background-color: #30363d !important; }
-    .stButton > button[kind="primary"] {
-        background-color: #ff4b4b !important;
-        color: white !important;
-    }
-
-    /* Dividers e textos */
-    hr { border-color: #30363d !important; }
-    .stCaption { color: #8b949e !important; }
-    .stAlert {
-        background-color: #1c2128 !important;
-        color: #fafafa !important;
-        border: 1px solid #30363d !important;
-    }
-    .stStatusWidget { background-color: #1c2128 !important; }
-    .stStatusWidget * { color: #fafafa !important; }
-
-    /* Text Input (renomear) */
-    .stTextInput > div > div > input {
-        background-color: #21262d !important;
-        color: #fafafa !important;
-        border: 1px solid #30363d !important;
-    }
-
-    /* Expander */
-    .streamlit-expanderHeader {
-        background-color: #21262d !important;
-        color: #fafafa !important;
-    }
-    .streamlit-expanderContent {
-        background-color: #1c2128 !important;
-        color: #fafafa !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+# --- CSS LEVE (só ajuste fino dos botões isolados) ---
+st.markdown("""
+<style>
+/* Deixa as bolhas de chat com cantos arredondados e espaçamento bonito */
+.stChatMessage { border-radius: 12px; }
+</style>
+""", unsafe_allow_html=True)
 
 # --- SIDEBAR ---
 with st.sidebar:
     st.title("⚙️ Configurações")
 
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("☀️ Claro", use_container_width=True, type="primary" if st.session_state.tema == "claro" else "secondary"):
-            if st.session_state.tema != "claro":
-                st.session_state.tema = "claro"
-                st.rerun()
-    with col2:
-        if st.button("🌙 Escuro", use_container_width=True, type="primary" if st.session_state.tema == "escuro" else "secondary"):
-            if st.session_state.tema != "escuro":
-                st.session_state.tema = "escuro"
-                st.rerun()
-
-    st.divider()
     persona = st.selectbox("🎭 Personalidade da IA:", ["Assistente Padrão", "Professor Didático", "Programador Sênior", "Amigo Informal"])
+
     st.divider()
     st.subheader("💬 Conversas")
 
@@ -210,12 +109,12 @@ for idx, message in enumerate(st.session_state.messages):
             st.divider()
             col_btn1, col_btn2 = st.columns(2)
 
-            # === BOTÃO OUVIR (CORREÇÃO 3: cor do texto segue o tema) ===
+            # === BOTÃO OUVIR ===
             with col_btn1:
                 texto_escape = message["content"].replace("'", "\\'").replace('"', '\\"').replace("\n", "\\n").replace("\r", "")
                 html_ouvir = f"""
                 <style>body {{ margin: 0; padding: 0; background: transparent; }}</style>
-                <button style="background:transparent; border:1px solid {COR_BORDA_BTN}; border-radius:6px; padding:8px 16px; cursor:pointer; font-size:14px; width:100%; color:{COR_TEXTO_BTN};" onclick="falar()">🔊 Ouvir</button>
+                <button style="background:transparent; border:1px solid #30363d; border-radius:6px; padding:8px 16px; cursor:pointer; font-size:14px; width:100%; color:#c9d1d9;" onclick="falar()">🔊 Ouvir</button>
                 <script>
                 function falar() {{
                     window.speechSynthesis.cancel();
@@ -230,12 +129,12 @@ for idx, message in enumerate(st.session_state.messages):
                 """
                 components.html(html_ouvir, height=50, width=130, scrolling=False)
 
-            # === BOTÃO COPIAR (CORREÇÃO 3: cor do texto segue o tema) ===
+            # === BOTÃO COPIAR ===
             with col_btn2:
                 texto_escape = message["content"].replace("'", "\\'").replace('"', '\\"').replace("\n", "\\n").replace("\r", "")
                 html_copiar = f"""
                 <style>body {{ margin: 0; padding: 0; background: transparent; }}</style>
-                <button id="btn" style="background:transparent; border:1px solid {COR_BORDA_BTN}; border-radius:6px; padding:8px 16px; cursor:pointer; font-size:14px; width:100%; color:{COR_TEXTO_BTN};" onclick="copiar()">📋 Copiar</button>
+                <button id="btn" style="background:transparent; border:1px solid #30363d; border-radius:6px; padding:8px 16px; cursor:pointer; font-size:14px; width:100%; color:#c9d1d9;" onclick="copiar()">📋 Copiar</button>
                 <script>
                 function copiar() {{
                     navigator.clipboard.writeText('{texto_escape}').then(() => {{
