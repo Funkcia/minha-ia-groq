@@ -7,10 +7,10 @@ import streamlit.components.v1 as components
 # Configuração da página
 st.set_page_config(page_title="Minha IA Pessoal", page_icon="🤖", layout="wide")
 
-# --- DETECTA O TEMA ATUAL PELA URL (nativo do Streamlit) ---
+# --- DETECTA O TEMA ATUAL PELA URL ---
 tema = st.query_params.get("__theme", "dark")  # padrão: escuro
 
-# Cores dos botões isoladas conforme o tema
+# Cores dos botões isolados conforme o tema
 if tema == "light":
     COR_TEXTO_BTN, COR_BORDA_BTN = "#24292f", "#d0d7de"
 else:
@@ -21,25 +21,12 @@ if "conversations" not in st.session_state:
     st.session_state.conversations = []
 if "current_conv_id" not in st.session_state:
     st.session_state.current_conv_id = None
+if "nav_tema" not in st.session_state:
+    st.session_state.nav_tema = None
 
-# --- CSS DOS BOTÕES DE TEMA (funciona nos dois temas) ---
+# --- CSS leve ---
 st.markdown("""
 <style>
-.btn-tema {
-    display: inline-block;
-    padding: 6px 14px;
-    margin-right: 6px;
-    border: 1px solid #888;
-    border-radius: 8px;
-    text-decoration: none;
-    font-size: 14px;
-    color: inherit !important;
-}
-.btn-tema.ativo {
-    background: rgba(255, 75, 75, 0.15);
-    border-color: #FF4B4B;
-    font-weight: bold;
-}
 .stChatMessage { border-radius: 12px; }
 </style>
 """, unsafe_allow_html=True)
@@ -48,22 +35,16 @@ st.markdown("""
 with st.sidebar:
     st.title("⚙️ Configurações")
 
-    # Botões de tema (abrem na MESMA aba)
+    # Botões de tema NATIVOS (mesma aba)
     col_t1, col_t2 = st.columns(2)
     with col_t1:
-        st.link_button(
-            "☀️ Claro",
-            "?__theme=light",
-            use_container_width=True,
-            type="primary" if tema == "light" else "secondary"
-        )
+        if st.button("☀️ Claro", use_container_width=True, type="primary" if tema == "light" else "secondary"):
+            st.session_state.nav_tema = "light"
+            st.rerun()
     with col_t2:
-        st.link_button(
-            "🌙 Escuro",
-            "?__theme=dark",
-            use_container_width=True,
-            type="primary" if tema == "dark" else "secondary"
-        )
+        if st.button("🌙 Escuro", use_container_width=True, type="primary" if tema == "dark" else "secondary"):
+            st.session_state.nav_tema = "dark"
+            st.rerun()
 
     st.divider()
     persona = st.selectbox("🎭 Personalidade da IA:", ["Assistente Padrão", "Professor Didático", "Programador Sênior", "Amigo Informal"])
@@ -236,3 +217,13 @@ if prompt := st.chat_input("Digite sua mensagem..."):
     st.session_state.messages.append({"role": "assistant", "content": resposta})
     if current_conv: current_conv["messages"] = st.session_state.messages.copy()
     st.rerun()
+
+# --- TROCA DE TEMA NA MESMA ABA (deve ficar no FINAL do script) ---
+if st.session_state.nav_tema:
+    novo_tema = st.session_state.nav_tema
+    st.session_state.nav_tema = None
+    st.markdown(f"""
+    <script>
+    window.location.replace(window.location.pathname + '?__theme={novo_tema}');
+    </script>
+    """, unsafe_allow_html=True)
