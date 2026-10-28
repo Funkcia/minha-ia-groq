@@ -14,55 +14,110 @@ if "conversations" not in st.session_state:
     st.session_state.conversations = []
 if "current_conv_id" not in st.session_state:
     st.session_state.current_conv_id = None
-if "renaming_id" not in st.session_state:
-    st.session_state.renaming_id = None
 
-# --- CSS TEMA ESCURO (Injetado diretamente no Streamlit) ---
+# --- CSS TEMA ESCURO COMPLETO ---
 if st.session_state.tema == "escuro":
     st.markdown("""
     <style>
-    /* Força o tema escuro nos containers principais do Streamlit */
-    .stApp { background-color: #0e1117 !important; color: #fafafa !important; }
-    .stSidebar { background-color: #161b22 !important; }
-    .stSidebar * { color: #fafafa !important; }
-    .stChatMessage { background-color: #1c2128 !important; border: 1px solid #30363d !important; }
-    .stChatMessage * { color: #fafafa !important; }
-    .stChatInput textarea { background-color: #21262d !important; color: #fafafa !important; caret-color: #fafafa !important; }
-    .stChatInput textarea::placeholder { color: #8b949e !important; }
-    .stSelectbox [data-baseweb="select"] { background-color: #21262d !important; color: #fafafa !important; }
-    hr { border-color: #30363d !important; }
-    .stCaption { color: #8b949e !important; }
-    .stAlert { background-color: #1c2128 !important; color: #fafafa !important; border: 1px solid #30363d !important; }
+    /* Tema Escuro - Cobertura Total */
+    .stApp {
+        background-color: #0e1117 !important;
+        color: #fafafa !important;
+    }
+    
+    /* Sidebar */
+    .stSidebar, .stSidebar [data-testid="stSidebarContent"] {
+        background-color: #161b22 !important;
+    }
+    .stSidebar * {
+        color: #fafafa !important;
+    }
+    
+    /* Chat Messages */
+    .stChatMessage {
+        background-color: #1c2128 !important;
+        border: 1px solid #30363d !important;
+    }
+    .stChatMessage * {
+        color: #fafafa !important;
+    }
+    
+    /* Input de Chat */
+    .stChatInput textarea {
+        background-color: #21262d !important;
+        color: #fafafa !important;
+        caret-color: #fafafa !important;
+    }
+    .stChatInput textarea::placeholder {
+        color: #8b949e !important;
+    }
+    
+    /* Selectbox */
+    .stSelectbox [data-baseweb="select"],
+    .stSelectbox [data-baseweb="select"] * {
+        background-color: #21262d !important;
+        color: #fafafa !important;
+    }
+    
+    /* Botões */
+    .stButton > button {
+        background-color: #21262d !important;
+        color: #fafafa !important;
+        border: 1px solid #30363d !important;
+    }
+    .stButton > button:hover {
+        background-color: #30363d !important;
+    }
+    .stButton > button[kind="primary"] {
+        background-color: #ff4b4b !important;
+        color: white !important;
+    }
+    
+    /* Dividers */
+    hr {
+        border-color: #30363d !important;
+    }
+    
+    /* Textos secundários */
+    .stCaption, .stMarkdown p, .stMarkdown span, .stMarkdown div {
+        color: #fafafa !important;
+    }
+    
+    /* Alertas e Status */
+    .stAlert {
+        background-color: #1c2128 !important;
+        color: #fafafa !important;
+        border: 1px solid #30363d !important;
+    }
+    .stStatusWidget {
+        background-color: #1c2128 !important;
+    }
+    .stStatusWidget * {
+        color: #fafafa !important;
+    }
+    
+    /* Expander */
+    .streamlit-expanderHeader {
+        background-color: #21262d !important;
+        color: #fafafa !important;
+    }
+    .streamlit-expanderContent {
+        background-color: #1c2128 !important;
+        color: #fafafa !important;
+    }
+    
+    /* Text Input */
+    .stTextInput > div > div > input {
+        background-color: #21262d !important;
+        color: #fafafa !important;
+        border: 1px solid #30363d !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# --- CSS GLOBAL DOS BOTÕES ---
-st.markdown("""
-<style>
-.btn-acao {
-    background: transparent;
-    border: 1px solid #d0d7de;
-    border-radius: 6px;
-    padding: 8px 16px;
-    cursor: pointer;
-    font-size: 14px;
-    font-family: sans-serif;
-    transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    color: #24292f;
-    width: 100%;
-    height: 100%;
-}
-.btn-acao:hover { background-color: #f3f4f6; border-color: #afb1b8; }
-</style>
-""", unsafe_allow_html=True)
-
 # --- SIDEBAR ---
 with st.sidebar:
-    st.title("️ Configurações")
+    st.title("⚙️ Configurações")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -77,7 +132,7 @@ with st.sidebar:
                 st.rerun()
 
     st.divider()
-    persona = st.selectbox("🎭 Personalidade da IA:", ["Assistente Padrão", "Professor Didático", "Programador Sênior", "Amigo Informal"])
+    persona = st.selectbox(" Personalidade da IA:", ["Assistente Padrão", "Professor Didático", "Programador Sênior", "Amigo Informal"])
     st.divider()
     st.subheader("💬 Conversas")
 
@@ -89,40 +144,39 @@ with st.sidebar:
 
     if st.session_state.conversations:
         for conv in st.session_state.conversations:
-            col1, col2, col3 = st.columns([4, 1, 1])
+            ativo = "✅ " if conv["id"] == st.session_state.current_conv_id else ""
             
-            with col1:
-                ativo = "✅ " if conv["id"] == st.session_state.current_conv_id else ""
-                if st.button(f"{ativo}{conv['title']}", key=f"load_{conv['id']}", use_container_width=True):
-                    st.session_state.current_conv_id = conv["id"]
-                    st.session_state.renaming_id = None
-                    st.rerun()
+            # Botão principal da conversa
+            if st.button(f"{ativo}{conv['title']}", key=f"load_{conv['id']}", use_container_width=True):
+                st.session_state.current_conv_id = conv["id"]
+                st.rerun()
             
-            with col2:
-                if st.button("✏️", key=f"rename_{conv['id']}", use_container_width=True):
-                    st.session_state.renaming_id = conv["id"]
-            
-            with col3:
-                if st.button("🗑️", key=f"del_{conv['id']}", use_container_width=True):
+            # Botões de ação (renomear e deletar) em linha
+            col_rename, col_delete = st.columns([1, 1])
+            with col_rename:
+                if st.button("✏️ Renomear", key=f"rename_{conv['id']}", use_container_width=True):
+                    st.session_state[f"renaming_{conv['id']}"] = True
+            with col_delete:
+                if st.button("🗑️ Deletar", key=f"del_{conv['id']}", use_container_width=True):
                     st.session_state.conversations = [c for c in st.session_state.conversations if c["id"] != conv["id"]]
                     if st.session_state.current_conv_id == conv["id"]:
                         st.session_state.current_conv_id = None
                     st.rerun()
-
-            # Interface de Renomear
-            if st.session_state.renaming_id == conv["id"]:
-                st.markdown("**Renomear:**")
-                new_name = st.text_input("Novo nome:", value=conv["title"], key=f"input_{conv['id']}", label_visibility="collapsed")
-                col_save, col_cancel = st.columns(2)
-                with col_save:
-                    if st.button("💾", key=f"save_{conv['id']}", use_container_width=True):
-                        conv["title"] = new_name
-                        st.session_state.renaming_id = None
-                        st.rerun()
-                with col_cancel:
-                    if st.button("❌", key=f"cancel_{conv['id']}", use_container_width=True):
-                        st.session_state.renaming_id = None
-                        st.rerun()
+            
+            # Interface de renomear (aparece abaixo do botão quando clicado)
+            if st.session_state.get(f"renaming_{conv['id']}", False):
+                with st.expander("Renomear conversa", expanded=True):
+                    new_name = st.text_input("Novo nome:", value=conv["title"], key=f"input_{conv['id']}")
+                    col_save, col_cancel = st.columns(2)
+                    with col_save:
+                        if st.button("💾 Salvar", key=f"save_{conv['id']}", use_container_width=True):
+                            conv["title"] = new_name
+                            st.session_state[f"renaming_{conv['id']}"] = False
+                            st.rerun()
+                    with col_cancel:
+                        if st.button("❌ Cancelar", key=f"cancel_{conv['id']}", use_container_width=True):
+                            st.session_state[f"renaming_{conv['id']}"] = False
+                            st.rerun()
 
     st.divider()
     st.caption("Feito com Streamlit + Groq 🚀")
@@ -165,14 +219,12 @@ for idx, message in enumerate(st.session_state.messages):
             st.divider()
             col_btn1, col_btn2 = st.columns(2)
 
-            # === BOTÃO OUVIR (Ajustado para não cortar) ===
+            # === BOTÃO OUVIR ===
             with col_btn1:
                 texto_escape = message["content"].replace("'", "\\'").replace('"', '\\"').replace("\n", "\\n").replace("\r", "")
                 html_ouvir = f"""
-                <style>
-                    body {{ margin: 0; padding: 0; background: transparent; }}
-                </style>
-                <button class="btn-acao" onclick="falar()">🔊 Ouvir</button>
+                <style>body {{ margin: 0; padding: 0; background: transparent; }}</style>
+                <button style="background:transparent; border:1px solid #d0d7de; border-radius:6px; padding:8px 16px; cursor:pointer; font-size:14px; width:100%; color:#24292f;" onclick="falar()">🔊 Ouvir</button>
                 <script>
                 function falar() {{
                     window.speechSynthesis.cancel();
@@ -185,16 +237,14 @@ for idx, message in enumerate(st.session_state.messages):
                 }}
                 </script>
                 """
-                components.html(html_ouvir, height=50, width=120, scrolling=False)
+                components.html(html_ouvir, height=50, width=130, scrolling=False)
 
-            # === BOTÃO COPIAR (Ajustado para não cortar) ===
+            # === BOTÃO COPIAR ===
             with col_btn2:
                 texto_escape = message["content"].replace("'", "\\'").replace('"', '\\"').replace("\n", "\\n").replace("\r", "")
                 html_copiar = f"""
-                <style>
-                    body {{ margin: 0; padding: 0; background: transparent; }}
-                </style>
-                <button id="btn" class="btn-acao" onclick="copiar()">📋 Copiar</button>
+                <style>body {{ margin: 0; padding: 0; background: transparent; }}</style>
+                <button id="btn" style="background:transparent; border:1px solid #d0d7de; border-radius:6px; padding:8px 16px; cursor:pointer; font-size:14px; width:100%; color:#24292f;" onclick="copiar()"> Copiar</button>
                 <script>
                 function copiar() {{
                     navigator.clipboard.writeText('{texto_escape}').then(() => {{
@@ -205,7 +255,7 @@ for idx, message in enumerate(st.session_state.messages):
                 }}
                 </script>
                 """
-                components.html(html_copiar, height=50, width=120, scrolling=False)
+                components.html(html_copiar, height=50, width=130, scrolling=False)
 
 # --- BUSCA WEB ---
 def pesquisar_na_web(consulta):
@@ -237,14 +287,14 @@ if prompt := st.chat_input("Digite sua mensagem..."):
 
     mensagem_para_ia = prompt
     if precisa_buscar:
-        with st.status(" Buscando informações atualizadas na web...", expanded=True) as status:
+        with st.status("🔍 Buscando informações atualizadas na web...", expanded=True) as status:
             contexto = pesquisar_na_web(prompt)
             st.write("Dados encontrados!")
             status.update(label="✅ Busca concluída!", state="complete", expanded=False)
             mensagem_para_ia = f"Use este contexto da web para responder:\n{contexto}\n\nPergunta: {prompt}"
 
     with st.chat_message("assistant"):
-        with st.spinner("🤔 Pensando..."):
+        with st.spinner(" Pensando..."):
             client = Groq(api_key=st.secrets["GROQ_API_KEY"])
             mensagens_envio = [{"role": "system", "content": system_prompt}] + st.session_state.messages[:-1] + [{"role": "user", "content": mensagem_para_ia}]
             response = client.chat.completions.create(model="openai/gpt-oss-120b", messages=mensagens_envio, temperature=0.7, max_tokens=1024)
