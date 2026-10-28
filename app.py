@@ -17,55 +17,46 @@ if "current_conv_id" not in st.session_state:
 if "renaming_id" not in st.session_state:
     st.session_state.renaming_id = None
 
-# --- CSS E TEMA ---
-# Injeta a classe 'dark-mode' no body se o tema for escuro
+# --- CSS TEMA ESCURO (Injetado diretamente no Streamlit) ---
 if st.session_state.tema == "escuro":
     st.markdown("""
-    <script>document.body.classList.add('dark-mode');</script>
     <style>
-    body.dark-mode .stApp { background-color: #0e1117 !important; color: #fafafa !important; }
-    body.dark-mode .stSidebar { background-color: #161b22 !important; }
-    body.dark-mode .stSidebar .stMarkdown h1,
-    body.dark-mode .stSidebar .stMarkdown h2,
-    body.dark-mode .stSidebar .stMarkdown h3,
-    body.dark-mode .stSidebar .stMarkdown p,
-    body.dark-mode .stSidebar .stMarkdown label,
-    body.dark-mode .stSidebar .stMarkdown span,
-    body.dark-mode .stSidebar .stMarkdown div { color: #fafafa !important; }
-    body.dark-mode .stSelectbox [data-baseweb="select"] { background-color: #21262d !important; color: #fafafa !important; }
-    body.dark-mode .stChatMessage { background-color: #1c2128 !important; border: 1px solid #30363d !important; }
-    body.dark-mode .stChatMessage * { color: #fafafa !important; }
-    body.dark-mode .stChatInput textarea { background-color: #21262d !important; color: #fafafa !important; caret-color: #fafafa !important; }
-    body.dark-mode .stChatInput textarea::placeholder { color: #8b949e !important; }
-    body.dark-mode hr { border-color: #30363d !important; }
-    body.dark-mode .stCaption { color: #8b949e !important; }
+    /* Força o tema escuro nos containers principais do Streamlit */
+    .stApp { background-color: #0e1117 !important; color: #fafafa !important; }
+    .stSidebar { background-color: #161b22 !important; }
+    .stSidebar * { color: #fafafa !important; }
+    .stChatMessage { background-color: #1c2128 !important; border: 1px solid #30363d !important; }
+    .stChatMessage * { color: #fafafa !important; }
+    .stChatInput textarea { background-color: #21262d !important; color: #fafafa !important; caret-color: #fafafa !important; }
+    .stChatInput textarea::placeholder { color: #8b949e !important; }
+    .stSelectbox [data-baseweb="select"] { background-color: #21262d !important; color: #fafafa !important; }
+    hr { border-color: #30363d !important; }
+    .stCaption { color: #8b949e !important; }
+    .stAlert { background-color: #1c2128 !important; color: #fafafa !important; border: 1px solid #30363d !important; }
     </style>
     """, unsafe_allow_html=True)
-else:
-    st.markdown("<script>document.body.classList.remove('dark-mode');</script>", unsafe_allow_html=True)
 
-# CSS Global para botões
+# --- CSS GLOBAL DOS BOTÕES ---
 st.markdown("""
 <style>
 .btn-acao {
     background: transparent;
     border: 1px solid #d0d7de;
     border-radius: 6px;
-    padding: 6px 14px;
+    padding: 8px 16px;
     cursor: pointer;
-    font-size: 13px;
-    font-family: inherit;
+    font-size: 14px;
+    font-family: sans-serif;
     transition: all 0.2s ease;
-    display: inline-flex;
+    display: flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
     color: #24292f;
-    min-width: 100px;
-    justify-content: center;
+    width: 100%;
+    height: 100%;
 }
 .btn-acao:hover { background-color: #f3f4f6; border-color: #afb1b8; }
-body.dark-mode .btn-acao { border-color: #30363d; color: #c9d1d9; }
-body.dark-mode .btn-acao:hover { background-color: #21262d; border-color: #8b949e; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -174,10 +165,13 @@ for idx, message in enumerate(st.session_state.messages):
             st.divider()
             col_btn1, col_btn2 = st.columns(2)
 
-            # === BOTÃO OUVIR ===
+            # === BOTÃO OUVIR (Ajustado para não cortar) ===
             with col_btn1:
                 texto_escape = message["content"].replace("'", "\\'").replace('"', '\\"').replace("\n", "\\n").replace("\r", "")
                 html_ouvir = f"""
+                <style>
+                    body {{ margin: 0; padding: 0; background: transparent; }}
+                </style>
                 <button class="btn-acao" onclick="falar()">🔊 Ouvir</button>
                 <script>
                 function falar() {{
@@ -191,12 +185,15 @@ for idx, message in enumerate(st.session_state.messages):
                 }}
                 </script>
                 """
-                components.html(html_ouvir, height=40, width=110, scrolling=False)
+                components.html(html_ouvir, height=50, width=120, scrolling=False)
 
-            # === BOTÃO COPIAR (Com feedback visual) ===
+            # === BOTÃO COPIAR (Ajustado para não cortar) ===
             with col_btn2:
                 texto_escape = message["content"].replace("'", "\\'").replace('"', '\\"').replace("\n", "\\n").replace("\r", "")
                 html_copiar = f"""
+                <style>
+                    body {{ margin: 0; padding: 0; background: transparent; }}
+                </style>
                 <button id="btn" class="btn-acao" onclick="copiar()">📋 Copiar</button>
                 <script>
                 function copiar() {{
@@ -208,7 +205,7 @@ for idx, message in enumerate(st.session_state.messages):
                 }}
                 </script>
                 """
-                components.html(html_copiar, height=40, width=110, scrolling=False)
+                components.html(html_copiar, height=50, width=120, scrolling=False)
 
 # --- BUSCA WEB ---
 def pesquisar_na_web(consulta):
@@ -240,14 +237,14 @@ if prompt := st.chat_input("Digite sua mensagem..."):
 
     mensagem_para_ia = prompt
     if precisa_buscar:
-        with st.status("🔍 Buscando informações atualizadas na web...", expanded=True) as status:
+        with st.status(" Buscando informações atualizadas na web...", expanded=True) as status:
             contexto = pesquisar_na_web(prompt)
             st.write("Dados encontrados!")
             status.update(label="✅ Busca concluída!", state="complete", expanded=False)
             mensagem_para_ia = f"Use este contexto da web para responder:\n{contexto}\n\nPergunta: {prompt}"
 
     with st.chat_message("assistant"):
-        with st.spinner(" Pensando..."):
+        with st.spinner("🤔 Pensando..."):
             client = Groq(api_key=st.secrets["GROQ_API_KEY"])
             mensagens_envio = [{"role": "system", "content": system_prompt}] + st.session_state.messages[:-1] + [{"role": "user", "content": mensagem_para_ia}]
             response = client.chat.completions.create(model="openai/gpt-oss-120b", messages=mensagens_envio, temperature=0.7, max_tokens=1024)
