@@ -48,11 +48,22 @@ st.markdown("""
 with st.sidebar:
     st.title("⚙️ Configurações")
 
-    # Botões de tema (links nativos que recarregam com o tema escolhido)
-    st.markdown(f"""
-    <a class="btn-tema {'ativo' if tema == 'light' else ''}" href="?__theme=light">☀️ Claro</a>
-    <a class="btn-tema {'ativo' if tema == 'dark' else ''}" href="?__theme=dark">🌙 Escuro</a>
-    """, unsafe_allow_html=True)
+    # Botões de tema (abrem na MESMA aba)
+    col_t1, col_t2 = st.columns(2)
+    with col_t1:
+        st.link_button(
+            "☀️ Claro",
+            "?__theme=light",
+            use_container_width=True,
+            type="primary" if tema == "light" else "secondary"
+        )
+    with col_t2:
+        st.link_button(
+            "🌙 Escuro",
+            "?__theme=dark",
+            use_container_width=True,
+            type="primary" if tema == "dark" else "secondary"
+        )
 
     st.divider()
     persona = st.selectbox("🎭 Personalidade da IA:", ["Assistente Padrão", "Professor Didático", "Programador Sênior", "Amigo Informal"])
