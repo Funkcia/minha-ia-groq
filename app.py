@@ -5,7 +5,7 @@ from datetime import datetime
 import streamlit.components.v1 as components
 
 # Configuração da página
-st.set_page_config(page_title="Minha IA Pessoal", page_icon="🤖", layout="wide")
+st.set_page_config(page_title="Minha IA Pessoal", page_icon="", layout="wide")
 
 # --- ESTADO INICIAL ---
 if "tema" not in st.session_state:
@@ -14,84 +14,71 @@ if "conversations" not in st.session_state:
     st.session_state.conversations = []
 if "current_conv_id" not in st.session_state:
     st.session_state.current_conv_id = None
-if "copiado_idx" not in st.session_state:
-    st.session_state.copiado_idx = None
 
-# --- CSS (Agora funciona corretamente para ambos os temas) ---
+# --- CSS GLOBAL (funciona para ambos os temas) ---
 CSS_TEMA = """
 <style>
-/* === TEMA CLARO (padrão) === */
-body.claro .stApp {
+/* === TEMA CLARO === */
+.stApp {
     background-color: #FFFFFF;
     color: #262730;
 }
-body.claro .stChatInput textarea {
+.stChatInput textarea {
     color: #262730 !important;
     caret-color: #262730 !important;
 }
-body.claro .stChatInput textarea::placeholder {
+.stChatInput textarea::placeholder {
     color: #808495 !important;
 }
 
-/* === TEMA ESCURO === */
-body.escuro .stApp {
+/* === TEMA ESCURO (sobrescreve quando ativado) === */
+body[data-theme="escuro"] .stApp,
+.stApp[data-theme="escuro"] {
     background-color: #0E1117 !important;
     color: #FAFAFA !important;
 }
-body.escuro .stSidebar {
+body[data-theme="escuro"] .stSidebar,
+.stApp[data-theme="escuro"] .stSidebar {
     background-color: #161B22 !important;
 }
-body.escuro .stSidebar .stMarkdown h1,
-body.escuro .stSidebar .stMarkdown h2,
-body.escuro .stSidebar .stMarkdown h3,
-body.escuro .stSidebar .stMarkdown p,
-body.escuro .stSidebar .stMarkdown label,
-body.escuro .stSidebar .stMarkdown span,
-body.escuro .stSidebar .stMarkdown div,
-body.escuro .stSidebar .stSelectbox label {
+body[data-theme="escuro"] .stSidebar *,
+.stApp[data-theme="escuro"] .stSidebar * {
     color: #FAFAFA !important;
 }
-body.escuro .stSelectbox [data-baseweb="select"] {
-    color: #FAFAFA !important;
+body[data-theme="escuro"] .stSelectbox [data-baseweb="select"],
+.stApp[data-theme="escuro"] .stSelectbox [data-baseweb="select"] {
     background-color: #21262D !important;
+    color: #FAFAFA !important;
 }
-body.escuro .stChatMessage {
+body[data-theme="escuro"] .stChatMessage,
+.stApp[data-theme="escuro"] .stChatMessage {
     background-color: #1C2128 !important;
     border: 1px solid #30363D !important;
 }
-body.escuro .stChatMessage .stMarkdown,
-body.escuro .stChatMessage .stMarkdown p,
-body.escuro .stChatMessage .stMarkdown li,
-body.escuro .stChatMessage .stMarkdown strong {
+body[data-theme="escuro"] .stChatMessage *,
+.stApp[data-theme="escuro"] .stChatMessage * {
     color: #FAFAFA !important;
 }
-body.escuro .stChatInput textarea {
+body[data-theme="escuro"] .stChatInput textarea,
+.stApp[data-theme="escuro"] .stChatInput textarea {
     color: #FAFAFA !important;
     caret-color: #FAFAFA !important;
     background-color: #21262D !important;
 }
-body.escuro .stChatInput textarea::placeholder {
+body[data-theme="escuro"] .stChatInput textarea::placeholder,
+.stApp[data-theme="escuro"] .stChatInput textarea::placeholder {
     color: #8B949E !important;
 }
-body.escuro hr {
+body[data-theme="escuro"] hr,
+.stApp[data-theme="escuro"] hr {
     border-color: #30363D !important;
 }
-body.escuro .stCaption {
+body[data-theme="escuro"] .stCaption,
+.stApp[data-theme="escuro"] .stCaption {
     color: #8B949E !important;
 }
-body.escuro .stAlert {
-    background-color: #1C2128 !important;
-    color: #FAFAFA !important;
-    border: 1px solid #30363D !important;
-}
-body.escuro .stStatusWidget {
-    background-color: #1C2128 !important;
-}
-body.escuro .stStatusWidget .stMarkdown {
-    color: #FAFAFA !important;
-}
 
-/* === BOTÕES DE AÇÃO (Ouvir/Copiar) - TAMANHO UNIFORME === */
+/* === BOTÕES DE AÇÃO === */
 .btn-acao {
     background: transparent;
     border: 1px solid #D0D7DE;
@@ -105,26 +92,65 @@ body.escuro .stStatusWidget .stMarkdown {
     align-items: center;
     gap: 6px;
     color: #24292F;
-    min-width: 90px;
+    min-width: 100px;
     justify-content: center;
 }
 .btn-acao:hover {
     background-color: #F3F4F6;
     border-color: #AFB1B8;
 }
-body.escuro .btn-acao {
+body[data-theme="escuro"] .btn-acao,
+.stApp[data-theme="escuro"] .btn-acao {
     border-color: #30363D;
     color: #C9D1D9;
 }
-body.escuro .btn-acao:hover {
+body[data-theme="escuro"] .btn-acao:hover,
+.stApp[data-theme="escuro"] .btn-acao:hover {
     background-color: #21262D;
     border-color: #8B949E;
 }
 </style>
 """
 
-st.markdown(f'<body class="{st.session_state.tema}"></body>', unsafe_allow_html=True)
+# Aplica o tema via atributo data-theme
+st.markdown(f'<div data-theme="{st.session_state.tema}"></div>', unsafe_allow_html=True)
 st.markdown(CSS_TEMA, unsafe_allow_html=True)
+
+# --- JavaScript Global para Copiar ---
+JS_GLOBAL = """
+<script>
+window.copiarTextoGlobal = function(texto) {
+    // Decodifica HTML entities
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = texto;
+    const textoLimpo = textarea.value;
+    
+    navigator.clipboard.writeText(textoLimpo).then(() => {
+        // Envia mensagem para o Streamlit mostrar toast
+        const event = new CustomEvent('textoCopiado', {detail: {sucesso: true}});
+        window.dispatchEvent(event);
+    }).catch(err => {
+        console.error('Erro ao copiar:', err);
+    });
+};
+
+window.falarTextoGlobal = function(texto) {
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = texto;
+    const textoLimpo = textarea.value;
+    
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(textoLimpo);
+    u.lang = 'pt-BR';
+    u.rate = 1.0;
+    const vozes = window.speechSynthesis.getVoices();
+    const vozPt = vozes.find(v => v.lang.includes('pt'));
+    if (vozPt) u.voice = vozPt;
+    window.speechSynthesis.speak(u);
+};
+</script>
+"""
+st.markdown(JS_GLOBAL, unsafe_allow_html=True)
 
 # --- SIDEBAR ---
 with st.sidebar:
@@ -137,7 +163,7 @@ with st.sidebar:
                 st.session_state.tema = "claro"
                 st.rerun()
     with col2:
-        if st.button(" Escuro", use_container_width=True, type="primary" if st.session_state.tema == "escuro" else "secondary"):
+        if st.button("🌙 Escuro", use_container_width=True, type="primary" if st.session_state.tema == "escuro" else "secondary"):
             if st.session_state.tema != "escuro":
                 st.session_state.tema = "escuro"
                 st.rerun()
@@ -172,7 +198,7 @@ with st.sidebar:
                     st.session_state.current_conv_id = conv["id"]
                     st.rerun()
             with col2:
-                if st.button("🗑️", key=f"del_{conv['id']}", use_container_width=True):
+                if st.button("️", key=f"del_{conv['id']}", use_container_width=True):
                     st.session_state.conversations = [c for c in st.session_state.conversations if c["id"] != conv["id"]]
                     if st.session_state.current_conv_id == conv["id"]:
                         st.session_state.current_conv_id = None
@@ -205,10 +231,10 @@ else:
 # --- TÍTULO ---
 if st.session_state.current_conv_id and current_conv:
     st.title(f"💬 {current_conv['title']}")
-    st.caption(f"🎭 {current_conv.get('persona', persona)} • 📊 {len(st.session_state.messages)} mensagens")
+    st.caption(f"🎭 {current_conv.get('persona', persona)} •  {len(st.session_state.messages)} mensagens")
 else:
-    st.title(" Minha IA Pessoal")
-    st.info(" Clique em **Nova Conversa** ou digite sua primeira mensagem abaixo!")
+    st.title("🤖 Minha IA Pessoal")
+    st.info("👈 Clique em **Nova Conversa** ou digite sua primeira mensagem abaixo!")
 
 # --- EXIBIR HISTÓRICO ---
 for idx, message in enumerate(st.session_state.messages):
@@ -221,41 +247,17 @@ for idx, message in enumerate(st.session_state.messages):
 
             # === BOTÃO OUVIR ===
             with col_btn1:
-                texto_limpo = message["content"].replace("'", "\\'").replace('"', '\\"').replace("\n", "\\n").replace("\r", "")
+                texto_escape = message["content"].replace("'", "\\'").replace('"', '\\"').replace("\n", "\\n").replace("\r", "")
                 html_ouvir = f"""
-                <button class="btn-acao" onclick="falarTexto('{texto_limpo}')"> Ouvir</button>
-                <script>
-                function falarTexto(t) {{
-                    window.speechSynthesis.cancel();
-                    const u = new SpeechSynthesisUtterance(t);
-                    u.lang = 'pt-BR';
-                    u.rate = 1.0;
-                    const vozes = window.speechSynthesis.getVoices();
-                    const vozPt = vozes.find(v => v.lang.includes('pt'));
-                    if (vozPt) u.voice = vozPt;
-                    window.speechSynthesis.speak(u);
-                }}
-                if (!window._vozesCarregadas) {{
-                    speechSynthesis.onvoiceschanged = () => {{ window._vozesCarregadas = true; }};
-                }}
-                </script>
+                <button class="btn-acao" onclick="window.parent.falarTextoGlobal('{texto_escape}')">🔊 Ouvir</button>
                 """
                 components.html(html_ouvir, height=40, width=110, scrolling=False)
 
-            # === BOTÃO COPIAR (mesmo tamanho do Ouvir) ===
+            # === BOTÃO COPIAR ===
             with col_btn2:
-                copiado = st.session_state.copiado_idx == idx
-                label = "✅ Copiado" if copiado else "📋 Copiar"
+                texto_escape = message["content"].replace("'", "\\'").replace('"', '\\"').replace("\n", "\\n").replace("\r", "")
                 html_copiar = f"""
-                <button class="btn-acao" onclick="copiarTexto('{message['content'].replace(chr(39), chr(92)+chr(39)).replace(chr(34), chr(92)+chr(34)).replace(chr(10), chr(92)+chr(110)).replace(chr(13), '')}', 'btn_copiar_{idx}')">{label}</button>
-                <script>
-                function copiarTexto(t, id) {{
-                    navigator.clipboard.writeText(t).then(() => {{
-                        const btn = document.getElementById(id);
-                        if (btn) {{ btn.innerHTML = '✅ Copiado'; setTimeout(() => {{ btn.innerHTML = '📋 Copiar'; }}, 1500); }}
-                    }});
-                }}
-                </script>
+                <button class="btn-acao" onclick="window.parent.copiarTextoGlobal('{texto_escape}')">📋 Copiar</button>
                 """
                 components.html(html_copiar, height=40, width=110, scrolling=False)
 
@@ -297,7 +299,7 @@ if prompt := st.chat_input("Digite sua mensagem..."):
 
     mensagem_para_ia = prompt
     if precisa_buscar:
-        with st.status("🔍 Buscando informações atualizadas na web...", expanded=True) as status:
+        with st.status(" Buscando informações atualizadas na web...", expanded=True) as status:
             contexto = pesquisar_na_web(prompt)
             st.write("Dados encontrados!")
             status.update(label="✅ Busca concluída!", state="complete", expanded=False)
