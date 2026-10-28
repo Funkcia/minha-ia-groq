@@ -1,9 +1,8 @@
-import os
 import streamlit as st
 from groq import Groq
 from ddgs import DDGS
 from datetime import datetime
-import html
+import base64
 
 # Configuração da página
 st.set_page_config(page_title="Minha IA Pessoal", page_icon="🤖", layout="wide")
@@ -18,187 +17,113 @@ if "conversations" not in st.session_state:
 if "current_conv_id" not in st.session_state:
     st.session_state.current_conv_id = None
 
-# --- CSS COMPLETO PARA TEMAS ---
-CSS_TEMA = """
-<style>
-/* TEMA CLARO */
-body.claro .stApp {
-    background-color: #ffffff;
-    color: #262730;
-}
-body.claro .stSidebar {
-    background-color: #f0f2f6;
-}
-body.claro .stChatMessage {
-    background-color: #f8f9fa;
-}
-body.claro .stTextInput > div > div > input {
-    background-color: #ffffff;
-    color: #262730;
-}
+# --- CSS PARA TEMA ESCURO (Abordagem Direta) ---
+if st.session_state.tema == "escuro":
+    st.markdown("""
+    <style>
+    /* Forçar tema escuro em todos os elementos */
+    .stApp {
+        background-color: #0e1117 !important;
+    }
+    .stApp * {
+        color: #fafafa !important;
+    }
+    .stSidebar {
+        background-color: #161b22 !important;
+    }
+    .stSidebar * {
+        color: #fafafa !important;
+    }
+    .stChatMessage {
+        background-color: #1c2128 !important;
+        border: 1px solid #30363d !important;
+    }
+    .stChatMessage * {
+        color: #fafafa !important;
+    }
+    .stTextInput > div > div > input {
+        background-color: #21262d !important;
+        color: #fafafa !important;
+        border: 1px solid #30363d !important;
+    }
+    .stSelectbox > div > div > div {
+        background-color: #21262d !important;
+        color: #fafafa !important;
+    }
+    .stButton > button {
+        background-color: #21262d !important;
+        color: #fafafa !important;
+        border: 1px solid #30363d !important;
+    }
+    .stButton > button:hover {
+        background-color: #30363d !important;
+    }
+    .stButton > button[kind="primary"] {
+        background-color: #ff4b4b !important;
+        color: white !important;
+    }
+    hr {
+        border-color: #30363d !important;
+    }
+    .stCaption {
+        color: #8b949e !important;
+    }
+    .stAlert {
+        background-color: #1c2128 !important;
+        color: #fafafa !important;
+    }
+    .stStatusWidget {
+        background-color: #1c2128 !important;
+    }
+    .stStatusWidget * {
+        color: #fafafa !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-/* TEMA ESCURO */
-body.escuro .stApp {
-    background-color: #0e1117 !important;
-    color: #fafafa !important;
-}
-body.escuro .stSidebar {
-    background-color: #161b22 !important;
-}
-body.escuro .stSidebar .stMarkdown {
-    color: #fafafa !important;
-}
-body.escuro .stSidebar h1, 
-body.escuro .stSidebar h2, 
-body.escuro .stSidebar h3,
-body.escuro .stSidebar p,
-body.escuro .stSidebar label,
-body.escuro .stSidebar span {
-    color: #fafafa !important;
-}
-body.escuro .stChatMessage {
-    background-color: #1c2128 !important;
-    border: 1px solid #30363d !important;
-}
-body.escuro .stChatMessage .stMarkdown {
-    color: #fafafa !important;
-}
-body.escuro .stChatMessage .stMarkdown p {
-    color: #fafafa !important;
-}
-body.escuro .stTextInput > div > div > input {
-    background-color: #21262d !important;
-    color: #fafafa !important;
-    border: 1px solid #30363d !important;
-}
-body.escuro .stSelectbox > div > div > div {
-    background-color: #21262d !important;
-    color: #fafafa !important;
-}
-body.escuro .stButton > button {
-    color: #fafafa !important;
-}
-body.escuro .stButton > button[kind="secondary"] {
-    background-color: #21262d !important;
-    border: 1px solid #30363d !important;
-}
-body.escuro .stButton > button[kind="primary"] {
-    background-color: #ff4b4b !important;
-}
-body.escuro hr {
-    border-color: #30363d !important;
-}
-body.escuro .stCaption {
-    color: #8b949e !important;
-}
-body.escuro .stAlert {
-    background-color: #1c2128 !important;
-    color: #fafafa !important;
-}
-body.escuro .stStatusWidget {
-    background-color: #1c2128 !important;
-}
-body.escuro .stStatusWidget .stMarkdown {
-    color: #fafafa !important;
-}
-
-/* Botões de ação */
-.btn-acao {
-    background: transparent;
-    border: 1px solid #d0d7de;
-    border-radius: 6px;
-    padding: 6px 12px;
-    cursor: pointer;
-    font-size: 13px;
-    transition: all 0.2s;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-}
-.btn-acao:hover {
-    background-color: #f3f4f6;
-    transform: translateY(-1px);
-}
-body.escuro .btn-acao {
-    border-color: #30363d;
-    color: #fafafa;
-}
-body.escuro .btn-acao:hover {
-    background-color: #21262d;
-}
-</style>
-"""
-
-# Aplicar tema
-st.markdown(f'<body class="{st.session_state.tema}"></body>', unsafe_allow_html=True)
-st.markdown(CSS_TEMA, unsafe_allow_html=True)
-
-# --- JAVASCRIPT PARA TTS E COPIAR ---
-JS_FUNCIONALIDADES = """
+# --- JAVASCRIPT GLOBAL (Carregado uma vez) ---
+st.markdown("""
 <script>
 // Carregar vozes
-let vozesCarregadas = false;
-if (speechSynthesis.onvoiceschanged !== undefined) {
-    speechSynthesis.onvoiceschanged = function() {
-        vozesCarregadas = true;
-    };
-}
+window.speechSynthesis.getVoices();
 
-function ouvirTexto(texto) {
-    // Decodificar HTML entities
-    const textarea = document.createElement('textarea');
-    textarea.innerHTML = texto;
-    const textoLimpo = textarea.value;
-    
+function falarTexto(texto) {
     // Parar qualquer fala anterior
     window.speechSynthesis.cancel();
+    
+    // Limpar o texto (remover markdown e HTML)
+    const textoLimpo = texto.replace(/\\*\\*/g, '').replace(/\\*/g, '').replace(/`/g, '').replace(/<[^>]*>/g, '');
     
     const utterance = new SpeechSynthesisUtterance(textoLimpo);
     utterance.lang = 'pt-BR';
     utterance.rate = 1.0;
     utterance.pitch = 1.0;
     
-    // Aguardar vozes carregarem
-    const tentarFalar = () => {
-        const vozes = window.speechSynthesis.getVoices();
-        const vozPt = vozes.find(v => v.lang.startsWith('pt'));
-        if (vozPt) {
-            utterance.voice = vozPt;
-            window.speechSynthesis.speak(utterance);
-        } else {
-            // Fallback: tentar qualquer voz
-            window.speechSynthesis.speak(utterance);
-        }
-    };
-    
-    if (vozesCarregadas || window.speechSynthesis.getVoices().length > 0) {
-        tentarFalar();
-    } else {
-        // Aguardar carregamento
-        setTimeout(tentarFalar, 500);
+    // Tentar encontrar voz em português
+    const vozes = window.speechSynthesis.getVoices();
+    const vozPt = vozes.find(v => v.lang.includes('pt-BR') || v.lang.includes('pt'));
+    if (vozPt) {
+        utterance.voice = vozPt;
     }
+    
+    window.speechSynthesis.speak(utterance);
 }
 
 function copiarTexto(texto, btnId) {
-    // Decodificar HTML entities
-    const textarea = document.createElement('textarea');
-    textarea.innerHTML = texto;
-    const textoLimpo = textarea.value;
+    // Limpar o texto
+    const textoLimpo = texto.replace(/\\*\\*/g, '').replace(/\\*/g, '').replace(/`/g, '').replace(/<[^>]*>/g, '');
     
     navigator.clipboard.writeText(textoLimpo).then(() => {
         const btn = document.getElementById(btnId);
         if (btn) {
-            const original = btn.innerHTML;
-            btn.innerHTML = '✓ Copiado!';
-            setTimeout(() => { btn.innerHTML = original; }, 1500);
+            const original = btn.innerText;
+            btn.innerText = '✓ Copiado!';
+            setTimeout(() => { btn.innerText = original; }, 1500);
         }
-    }).catch(err => {
-        console.error('Erro ao copiar:', err);
     });
 }
 </script>
-"""
-st.markdown(JS_FUNCIONALIDADES, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 # --- SIDEBAR ---
 with st.sidebar:
@@ -213,7 +138,7 @@ with st.sidebar:
                 st.session_state.tema = "claro"
                 st.rerun()
     with col2:
-        if st.button(" Escuro", use_container_width=True,
+        if st.button("🌙 Escuro", use_container_width=True,
                      type="primary" if st.session_state.tema == "escuro" else "secondary"):
             if st.session_state.tema != "escuro":
                 st.session_state.tema = "escuro"
@@ -285,10 +210,10 @@ else:
 # --- TÍTULO DO CHAT ---
 if st.session_state.current_conv_id and current_conv:
     st.title(f"💬 {current_conv['title']}")
-    st.caption(f" {current_conv.get('persona', persona)} • 📊 {len(st.session_state.messages)} mensagens")
+    st.caption(f"🎭 {current_conv.get('persona', persona)} • 📊 {len(st.session_state.messages)} mensagens")
 else:
-    st.title("🤖 Minha IA Pessoal")
-    st.info("👈 Clique em **Nova Conversa** ou digite sua primeira mensagem abaixo!")
+    st.title(" Minha IA Pessoal")
+    st.info(" Clique em **Nova Conversa** ou digite sua primeira mensagem abaixo!")
 
 # --- EXIBIR HISTÓRICO ---
 for idx, message in enumerate(st.session_state.messages):
@@ -300,13 +225,10 @@ for idx, message in enumerate(st.session_state.messages):
             st.markdown("---")
             col_btn1, col_btn2 = st.columns(2)
             
-            # Preparar texto para JavaScript (escape HTML)
-            texto_html = html.escape(message["content"])
-            
-            # Botão Ouvir
+            # Botão Ouvir - usando data attribute para evitar problemas com caracteres especiais
             with col_btn1:
                 st.markdown(
-                    f'<button class="btn-acao" onclick="ouvirTexto(\'{texto_html}\')">🔊 Ouvir</button>',
+                    f'<button onclick="falarTexto(this.getAttribute(\'data-texto\'))" data-texto="{message["content"]}" style="background:none;border:1px solid #ccc;border-radius:4px;padding:4px 12px;cursor:pointer;">🔊 Ouvir</button>',
                     unsafe_allow_html=True
                 )
             
@@ -314,7 +236,7 @@ for idx, message in enumerate(st.session_state.messages):
             with col_btn2:
                 btn_id = f"copiar_{idx}"
                 st.markdown(
-                    f'<button class="btn-acao" id="{btn_id}" onclick="copiarTexto(\'{texto_html}\', \'{btn_id}\')">📋 Copiar</button>',
+                    f'<button id="{btn_id}" onclick="copiarTexto(this.getAttribute(\'data-texto\'), \'{btn_id}\')" data-texto="{message["content"]}" style="background:none;border:1px solid #ccc;border-radius:4px;padding:4px 12px;cursor:pointer;">📋 Copiar</button>',
                     unsafe_allow_html=True
                 )
 
