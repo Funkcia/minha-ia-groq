@@ -7,26 +7,91 @@ import streamlit.components.v1 as components
 # Configuração da página
 st.set_page_config(page_title="Minha IA Pessoal", page_icon="🤖", layout="wide")
 
-# --- DETECTA O TEMA ATUAL PELA URL ---
-tema = st.query_params.get("__theme", "dark")  # padrão: escuro
-
-# Cores dos botões isolados conforme o tema
-if tema == "light":
-    COR_TEXTO_BTN, COR_BORDA_BTN = "#24292f", "#d0d7de"
-else:
-    COR_TEXTO_BTN, COR_BORDA_BTN = "#c9d1d9", "#30363d"
-
 # --- ESTADO INICIAL ---
 if "conversations" not in st.session_state:
     st.session_state.conversations = []
 if "current_conv_id" not in st.session_state:
     st.session_state.current_conv_id = None
-if "nav_tema" not in st.session_state:
-    st.session_state.nav_tema = None
 
-# --- CSS leve ---
+# --- CSS: TEMA CLARO INSTANTÂNEO (ativa quando o checkbox está marcado) ---
 st.markdown("""
 <style>
+/* Botões isolados (Ouvir/Copiar): cor neutra que funciona nos dois temas */
+.btn-neutro {
+    background: transparent;
+    border: 1px solid #8b949e;
+    border-radius: 6px;
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 14px;
+    width: 100%;
+    color: #8b949e;
+}
+.btn-neutro:hover { border-color: #b1bac4; color: #b1bac4; }
+
+/* ============ MODO CLARO (quando o checkbox está marcado) ============ */
+.stApp:has(input[type="checkbox"]:checked) {
+    background-color: #ffffff !important;
+}
+.stApp:has(input[type="checkbox"]:checked) * {
+    color: #262730 !important;
+}
+.stApp:has(input[type="checkbox"]:checked) .stSidebar,
+.stApp:has(input[type="checkbox"]:checked) .stSidebar > div {
+    background-color: #f6f8fa !important;
+}
+.stApp:has(input[type="checkbox"]:checked) .stChatMessage {
+    background-color: #f6f8fa !important;
+    border: 1px solid #d0d7de !important;
+}
+.stApp:has(input[type="checkbox"]:checked) .stChatInput textarea,
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stChatInput"] textarea {
+    background-color: #ffffff !important;
+    caret-color: #262730 !important;
+}
+.stApp:has(input[type="checkbox"]:checked) .stChatInput textarea::placeholder,
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stChatInput"] textarea::placeholder {
+    color: #808495 !important;
+}
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stChatInputContainer"],
+.stApp:has(input[type="checkbox"]:checked) .stChatInputContainer,
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stChatInput"],
+.stApp:has(input[type="checkbox"]:checked) .stChatInput {
+    background-color: #ffffff !important;
+}
+.stApp:has(input[type="checkbox"]:checked) .stButton > button {
+    background-color: #ffffff !important;
+    border: 1px solid #d0d7de !important;
+}
+.stApp:has(input[type="checkbox"]:checked) .stButton > button:hover {
+    background-color: #f0f2f6 !important;
+}
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stSelectbox"] div,
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stSelectbox"] div div {
+    background-color: #ffffff !important;
+}
+.stApp:has(input[type="checkbox"]:checked) hr {
+    border-color: #d0d7de !important;
+}
+.stApp:has(input[type="checkbox"]:checked) .stCaption {
+    color: #57606a !important;
+}
+.stApp:has(input[type="checkbox"]:checked) .stTextInput > div > div > input {
+    background-color: #ffffff !important;
+    border: 1px solid #d0d7de !important;
+}
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stExpander"] details,
+.stApp:has(input[type="checkbox"]:checked) .streamlit-expanderHeader {
+    background-color: #ffffff !important;
+}
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stAlert"],
+.stApp:has(input[type="checkbox"]:checked) .stAlert {
+    background-color: #f6f8fa !important;
+}
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stStatusWidget"],
+.stApp:has(input[type="checkbox"]:checked) .stStatusWidget {
+    background-color: #f6f8fa !important;
+}
 .stChatMessage { border-radius: 12px; }
 </style>
 """, unsafe_allow_html=True)
@@ -35,16 +100,8 @@ st.markdown("""
 with st.sidebar:
     st.title("⚙️ Configurações")
 
-    # Botões de tema NATIVOS (mesma aba)
-    col_t1, col_t2 = st.columns(2)
-    with col_t1:
-        if st.button("☀️ Claro", use_container_width=True, type="primary" if tema == "light" else "secondary"):
-            st.session_state.nav_tema = "light"
-            st.rerun()
-    with col_t2:
-        if st.button("🌙 Escuro", use_container_width=True, type="primary" if tema == "dark" else "secondary"):
-            st.session_state.nav_tema = "dark"
-            st.rerun()
+    # Interruptor de tema (instantâneo, mesma aba)
+    st.checkbox("☀️ Modo claro", help="Desmarcado = tema escuro")
 
     st.divider()
     persona = st.selectbox("🎭 Personalidade da IA:", ["Assistente Padrão", "Professor Didático", "Programador Sênior", "Amigo Informal"])
@@ -136,7 +193,7 @@ for idx, message in enumerate(st.session_state.messages):
                 texto_escape = message["content"].replace("'", "\\'").replace('"', '\\"').replace("\n", "\\n").replace("\r", "")
                 html_ouvir = f"""
                 <style>body {{ margin: 0; padding: 0; background: transparent; }}</style>
-                <button style="background:transparent; border:1px solid {COR_BORDA_BTN}; border-radius:6px; padding:8px 16px; cursor:pointer; font-size:14px; width:100%; color:{COR_TEXTO_BTN};" onclick="falar()">🔊 Ouvir</button>
+                <button class="btn-neutro" onclick="falar()">🔊 Ouvir</button>
                 <script>
                 function falar() {{
                     window.speechSynthesis.cancel();
@@ -156,7 +213,7 @@ for idx, message in enumerate(st.session_state.messages):
                 texto_escape = message["content"].replace("'", "\\'").replace('"', '\\"').replace("\n", "\\n").replace("\r", "")
                 html_copiar = f"""
                 <style>body {{ margin: 0; padding: 0; background: transparent; }}</style>
-                <button id="btn" style="background:transparent; border:1px solid {COR_BORDA_BTN}; border-radius:6px; padding:8px 16px; cursor:pointer; font-size:14px; width:100%; color:{COR_TEXTO_BTN};" onclick="copiar()">📋 Copiar</button>
+                <button id="btn" class="btn-neutro" onclick="copiar()">📋 Copiar</button>
                 <script>
                 function copiar() {{
                     navigator.clipboard.writeText('{texto_escape}').then(() => {{
@@ -212,18 +269,7 @@ if prompt := st.chat_input("Digite sua mensagem..."):
             response = client.chat.completions.create(model="openai/gpt-oss-120b", messages=mensagens_envio, temperature=0.7, max_tokens=1024)
             resposta = response.choices[0].message.content
             st.markdown(resposta)
-            st.markdown("<script>setTimeout(() => window.scrollTo({top: document.body.scrollHeight, behavior: 'smooth'}), 300);</script>", unsafe_allow_html=True)
 
     st.session_state.messages.append({"role": "assistant", "content": resposta})
     if current_conv: current_conv["messages"] = st.session_state.messages.copy()
     st.rerun()
-
-# --- TROCA DE TEMA NA MESMA ABA (deve ficar no FINAL do script) ---
-if st.session_state.nav_tema:
-    novo_tema = st.session_state.nav_tema
-    st.session_state.nav_tema = None
-    st.markdown(f"""
-    <script>
-    window.location.replace(window.location.pathname + '?__theme={novo_tema}');
-    </script>
-    """, unsafe_allow_html=True)
