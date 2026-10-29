@@ -175,8 +175,24 @@ with st.sidebar:
                             st.session_state[f"renaming_{conv['id']}"] = False
                             st.rerun()
 
+        st.divider()
+    conv_atual = next((c for c in st.session_state.conversations if c["id"] == st.session_state.current_conv_id), None)
+    if conv_atual and conv_atual.get("messages"):
+        linhas = []
+        for m in conv_atual["messages"]:
+            quem = "👤 Você" if m["role"] == "user" else "🤖 IA"
+            linhas.append(f"{quem}: {m['content']}")
+        txt_export = "\n\n".join(linhas)
+        st.download_button(
+            "📥 Exportar conversa (TXT)",
+            data=txt_export,
+            file_name=f"conversa-{conv_atual['id']}.txt",
+            mime="text/plain",
+            use_container_width=True
+        )
+
     st.divider()
-    st.caption("Feito com Streamlit + Groq 🚀")
+    st.caption("Feito com SysNext Desenvolvimento🚀")
 
 # --- PROMPTS ---
 prompts = {
@@ -198,6 +214,9 @@ if st.session_state.current_conv_id:
 else:
     st.session_state.messages = []
     system_prompt = prompts[persona]
+
+# --- REGRA DE IDIOMA (responde no idioma de quem perguntou) ---
+system_prompt += " Detecte o idioma da mensagem do usuário e responda exatamente no mesmo idioma, a menos que ele peça outro idioma."
 
 # --- TÍTULO ---
 if st.session_state.current_conv_id and current_conv:
