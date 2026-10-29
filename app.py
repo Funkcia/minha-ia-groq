@@ -48,8 +48,8 @@ def chamar_gemini(imagem_bytes, prompt_final):
         return None, f"Não consegui preparar a imagem ({type(e).__name__}: {str(e)[:120]})."
     erros = []
     quota = False
-    # só 2 modelos estáveis; o alias "latest" (que dava 504) ficou de fora
-    for nome in ["gemini-2.0-flash", "gemini-2.5-flash"]:
+    # 3.8-flash = o nome que a Google mandou usar; latest = apelido pro modelo atual (válido)
+    for nome in ["gemini-3.8-flash", "gemini-flash-latest"]:
         try:
             mg = genai.GenerativeModel(nome, generation_config=cfg)
             r = mg.generate_content([prompt_final, img_final], request_options={"timeout": 30})
@@ -66,7 +66,7 @@ def chamar_gemini(imagem_bytes, prompt_final):
                 quota = True
             erros.append(f"[{nome}] {s[:140]}")
     if quota:
-        return None, "⏳ Limite da camada grátis da Google atingido (429). Espere ~1 min (ou o dia) e tente de novo. Enquanto isso, o texto via Groq segue instantâneo."
+        return None, "⏳ Limite da camada grátis da Google atingido (429). Espere ~1 min e tente de novo."
     return None, "  •  ".join(erros)
 
 st.markdown("""
