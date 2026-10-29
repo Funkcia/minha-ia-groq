@@ -31,37 +31,43 @@ def visao_config():
     return None, "Sem chave Gemini e sem modelo de visão no Groq"
 
 def chamar_gemini(imagem_bytes, prompt_final):
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    from PIL import Image
-    # 1) Normaliza a imagem: remove alpha e limita o tamanho -> menos tokens, mais rápido
-    img_pil = Image.open(io.BytesIO(imagem_bytes))
-    if img_pil.mode in ("RGBA", "LA", "P"):
-        img_pil = img_pil.convert("RGB")
-    if max(img_pil.size) > 1024:
-        img_pil.thumbnail((1024, 1024))
-    buf = io.BytesIO()
-    img_pil.save(buf, format="JPEG", quality=85)
-    buf.seek(0)
-    img_final = Image.open(buf)
-
-    cfg = genai.types.GenerationConfig(max_output_tokens=400, temperature=0.4)
-    ultimo = None
-    # 2) Timeout CURTO (25s): se um modelo travar, pula pro próximo sem esperar o século
-    # 3) Ordem: os mais estáveis primeiro, o "latest" (que deu 504) por último
-    for nome in ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-flash-latest"]:
+    try:
+        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+        from PIL import Image
+        img_pil = Image.open(io.BytesIO(imagem_bytes))
+        if img_pil.mode in ("RGBA", "LA", "P"):
+            img_pil = img_pil.convert("RGB")
+        if max(img_pil.size) > 1024:
+            img_pil.thumbnail((1024, 1024))
+        buf = io.BytesIO()
+        img_pil.save(buf, format="JPEG", quality=85)
+        buf.seek(0)
+        img_final = Image.open(buf)
+        cfg = genai.types.GenerationConfig(max_output_tokens=400, temperature=0.4)
+    except Exception as e:
+        return None, f"Não consegui preparar a imagem ({type(e).__name__}: {str(e)[:120]})."
+    erros = []
+    quota = False
+    # só 2 modelos estáveis; o alias "latest" (que dava 504) ficou de fora
+    for nome in ["gemini-2.0-flash", "gemini-2.5-flash"]:
         try:
             mg = genai.GenerativeModel(nome, generation_config=cfg)
-            r = mg.generate_content([prompt_final, img_final], request_options={"timeout": 25})
+            r = mg.generate_content([prompt_final, img_final], request_options={"timeout": 30})
             try:
                 txt = r.text
             except Exception:
                 txt = ""
             if txt and txt.strip():
                 return txt, None
-            ultimo = f"[{nome}] vazio/bloqueado"
+            erros.append(f"[{nome}] vazio/bloqueado")
         except Exception as e:
-            ultimo = f"[{nome}] {e}"
-    return None, ultimo
+            s = str(e)
+            if "429" in s or "RESOURCE_EXHAUSTED" in s or "quota" in s.lower():
+                quota = True
+            erros.append(f"[{nome}] {s[:140]}")
+    if quota:
+        return None, "⏳ Limite da camada grátis da Google atingido (429). Espere ~1 min (ou o dia) e tente de novo. Enquanto isso, o texto via Groq segue instantâneo."
+    return None, "  •  ".join(erros)
 
 st.markdown("""
 <style>
