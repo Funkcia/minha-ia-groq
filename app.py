@@ -199,6 +199,8 @@ with st.sidebar:
                             st.session_state[f"renaming_{conv['id']}"] = False
                             st.rerun()
 
+                st.caption(f"👁️ Modelo de visão detectado: {modelo_visao_disponivel() or 'NENHUM na sua conta'}")
+
             st.divider()
     st.subheader("📎 Arquivos")
     upload = st.file_uploader("PDF, TXT ou imagem", type=["pdf", "txt", "png", "jpg", "jpeg"], label_visibility="collapsed")
@@ -275,6 +277,9 @@ else:
     st.session_state.messages = []
     system_prompt = prompts[persona]
 
+if st.session_state.get("aviso_visao"):
+    st.error("⚠️ Sua conta Groq não tem nenhum modelo de visão disponível agora, então a imagem foi ignorada. Abaixo, na sidebar, aparece o nome do modelo de visão detectado (ou 'nenhum').")
+
 # --- REGRA DE IDIOMA (responde no idioma de quem perguntou) ---
 system_prompt += " Detecte o idioma da mensagem do usuário e responda exatamente no mesmo idioma, a menos que ele peça outro idioma."
 
@@ -339,7 +344,7 @@ def modelo_visao_disponivel():
     try:
         c = Groq(api_key=st.secrets["GROQ_API_KEY"])
         ids = [m.id for m in c.models.list()]
-        prefs = ["llama-4-scout", "llama-4-maverick", "scout-17b-16e", "maverick-17b-128e", "vision"]
+        prefs = ["llama-4-scout", "llama-4-maverick", "scout-17b-16e", "maverick-17b-128e", "vision", "llama-3.2-90b-vision", "llama-3.2-11b-vision", "pixtral"]
         for p in prefs:
             for mid in ids:
                 if p in mid:
@@ -368,7 +373,8 @@ if prompt := st.chat_input("Digite sua mensagem..."):
 
     texto_exibido = prompt
     if st.session_state.imagem:
-        texto_exibido += f"\n\n🖼️ *[imagem anexada: {st.session_state.imagem['nome']}]*"
+        texto_exibido += f"\n\n📷 *[imagem anexada: {st.session_state.imagem['nome']}]*"
+        st.session_state["aviso_visao"] = False
 
     st.session_state.messages.append({"role": "user", "content": texto_exibido})
     current_conv = next((c for c in st.session_state.conversations if c["id"] == st.session_state.current_conv_id), None)
@@ -407,7 +413,7 @@ if prompt := st.chat_input("Digite sua mensagem..."):
                 {"type": "image_url", "image_url": {"url": f"data:{img['mime']};base64,{img['base64']}"}},
             ]
         else:
-            st.warning("⚠️ Nenhum modelo de visão disponível na sua conta Groq agora. A imagem foi ignorada e vou responder só com o texto.")
+            st.session_state["aviso_visao"] = True
 
     with st.chat_message("assistant"):
         with st.spinner("🤔 Pensando..."):
