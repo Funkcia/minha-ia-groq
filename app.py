@@ -223,6 +223,8 @@ else:
 for idx, message in enumerate(st.session_state.messages):
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
+        if message.get("imagem"):
+            st.image(message["imagem"], width=240)
         if message["role"] == "assistant":
             st.divider()
             col_btn1, col_btn2 = st.columns(2)
@@ -275,14 +277,17 @@ if prompt := st.chat_input("Digite sua mensagem..."):
         st.session_state.current_conv_id = new_conv["id"]
         st.session_state.messages = []
         st.rerun()
-    texto_exibido = prompt
+    nova_msg = {"role": "user", "content": prompt}
     if st.session_state.imagem:
-        texto_exibido += f"\n\n📷 *[imagem anexada: {st.session_state.imagem['nome']}]*"
-    st.session_state.messages.append({"role": "user", "content": texto_exibido})
+        nova_msg["imagem"] = st.session_state.imagem["bytes"]
+    st.session_state.messages.append(nova_msg)
     current_conv = next((c for c in st.session_state.conversations if c["id"] == st.session_state.current_conv_id), None)
     if current_conv and len(current_conv["messages"]) == 0:
         current_conv["title"] = prompt[:30] + "..." if len(prompt) > 30 else prompt
-    with st.chat_message("user"): st.markdown(texto_exibido)
+    with st.chat_message("user"):
+        st.markdown(prompt)
+        if st.session_state.imagem:
+            st.image(st.session_state.imagem["bytes"], width=240)
 
     palavras_chave = ["quem ganhou", "eleições", "hoje", "atual", "preço", "notícia", "2026", "2025", "resultado", "últimas", "quanto está", "cotação"]
     precisa_buscar = any(palavra in prompt.lower() for palavra in palavras_chave)
