@@ -107,6 +107,21 @@ body:has(input[type="checkbox"]:checked) {
     background-color: #ffffff !important;
     background-image: none !important;
 }
+
+/* ===== FIX: caixa de digitação branca no modo claro ===== */
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stChatInput"],
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stChatInput"] div,
+.stApp:has(input[type="checkbox"]:checked) .stChatInput,
+.stApp:has(input[type="checkbox"]:checked) .stChatInput div {
+    background-color: #ffffff !important;
+    border-color: #d0d7de !important;
+}
+
+/* ===== FIX: ícones do topo visíveis no modo claro ===== */
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stHeader"] svg,
+.stApp:has(input[type="checkbox"]:checked) header svg {
+    fill: #262730 !important;
+}
 .stChatMessage { border-radius: 12px; }
 </style>
 """, unsafe_allow_html=True)
