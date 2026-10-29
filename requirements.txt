@@ -4,3 +4,4 @@ ddgs
 streamlit
 pypdf
 google-generativeai
+supabase
