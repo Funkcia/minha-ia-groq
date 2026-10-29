@@ -37,6 +37,22 @@ st.markdown("""
 }
 .btn-neutro:hover { border-color: #b1bac4; color: #b1bac4; }
 
+/* ===== Upload de arquivos claro no modo claro ===== */
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploader"],
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploadDropzone"],
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploadDropzone"] div,
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploader"] section,
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploader"] section div {
+    background-color: #ffffff !important;
+}
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploadDropzone"] {
+    border-color: #d0d7de !important;
+}
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploadDropzone"] button {
+    background-color: #ffffff !important;
+    border: 1px solid #d0d7de !important;
+}
+
 /* ===== Bolhas do chat arredondadas ===== */
 .stChatMessage { border-radius: 12px; }
 
@@ -317,6 +333,21 @@ for idx, message in enumerate(st.session_state.messages):
                 """
                 components.html(html_copiar, height=50, width=130, scrolling=False)
 
+# --- DETECÇÃO AUTOMÁTICA DE MODELO DE VISÃO ---
+@st.cache_data(ttl=3600)
+def modelo_visao_disponivel():
+    try:
+        c = Groq(api_key=st.secrets["GROQ_API_KEY"])
+        ids = [m.id for m in c.models.list()]
+        prefs = ["llama-4-scout", "llama-4-maverick", "scout-17b-16e", "maverick-17b-128e", "vision"]
+        for p in prefs:
+            for mid in ids:
+                if p in mid:
+                    return mid
+        return None
+    except Exception:
+        return None
+
 # --- BUSCA WEB ---
 def pesquisar_na_web(consulta):
     try:
@@ -367,12 +398,16 @@ if prompt := st.chat_input("Digite sua mensagem..."):
     modelo = "openai/gpt-oss-120b"
     conteudo_usuario = mensagem_para_ia
     if st.session_state.imagem:
-        modelo = "meta-llama/llama-4-scout-17b-16e-instruct"
-        img = st.session_state.imagem
-        conteudo_usuario = [
-            {"type": "text", "text": mensagem_para_ia},
-            {"type": "image_url", "image_url": {"url": f"data:{img['mime']};base64,{img['base64']}"}},
-        ]
+        modelo_visao = modelo_visao_disponivel()
+        if modelo_visao:
+            modelo = modelo_visao
+            img = st.session_state.imagem
+            conteudo_usuario = [
+                {"type": "text", "text": mensagem_para_ia},
+                {"type": "image_url", "image_url": {"url": f"data:{img['mime']};base64,{img['base64']}"}},
+            ]
+        else:
+            st.warning("⚠️ Nenhum modelo de visão disponível na sua conta Groq agora. A imagem foi ignorada e vou responder só com o texto.")
 
     with st.chat_message("assistant"):
         with st.spinner("🤔 Pensando..."):
