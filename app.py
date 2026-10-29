@@ -33,13 +33,25 @@ def visao_config():
 def chamar_gemini(imagem_bytes, prompt_final):
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     from PIL import Image
+    # 1) Normaliza a imagem: remove alpha e limita o tamanho -> menos tokens, mais rápido
     img_pil = Image.open(io.BytesIO(imagem_bytes))
+    if img_pil.mode in ("RGBA", "LA", "P"):
+        img_pil = img_pil.convert("RGB")
+    if max(img_pil.size) > 1024:
+        img_pil.thumbnail((1024, 1024))
+    buf = io.BytesIO()
+    img_pil.save(buf, format="JPEG", quality=85)
+    buf.seek(0)
+    img_final = Image.open(buf)
+
     cfg = genai.types.GenerationConfig(max_output_tokens=400, temperature=0.4)
     ultimo = None
-    for nome in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]:
+    # 2) Timeout CURTO (25s): se um modelo travar, pula pro próximo sem esperar o século
+    # 3) Ordem: os mais estáveis primeiro, o "latest" (que deu 504) por último
+    for nome in ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-flash-latest"]:
         try:
             mg = genai.GenerativeModel(nome, generation_config=cfg)
-            r = mg.generate_content([prompt_final, img_pil], request_options={"timeout": 90})
+            r = mg.generate_content([prompt_final, img_final], request_options={"timeout": 25})
             try:
                 txt = r.text
             except Exception:
