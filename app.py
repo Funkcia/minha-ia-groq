@@ -5,17 +5,103 @@ from datetime import datetime
 import streamlit.components.v1 as components
 import base64
 import io
+import hashlib
 from pypdf import PdfReader
 import google.generativeai as genai
+
+try:
+    from supabase import create_client
+except Exception:
+    create_client = None
 
 st.set_page_config(page_title="Minha IA Pessoal", page_icon="🤖", layout="wide")
 
 for chave, valor in [("conversations", []), ("current_conv_id", None), ("documento", None),
-                     ("imagem", None), ("erro_gemini", None), ("status_visao", None)]:
+                     ("imagem", None), ("erro_gemini", None), ("erro_sb", None),
+                     ("hash_audio_ultimo", None), ("_sb_carregado", False)]:
     if chave not in st.session_state:
         st.session_state[chave] = valor
 
-# --- VISÃO AO VIVO (SEM CACHE: reflete a chave na hora) ---
+# ================= SUPABASE (opt-in: só liga com as 3 chaves nos Secrets) =================
+def sb():
+    if create_client is None:
+        return None
+    url = st.secrets.get("SUPABASE_URL")
+    key = st.secrets.get("SUPABASE_KEY")
+    if not url or not key:
+        return None
+    try:
+        return create_client(url, key)
+    except Exception:
+        return None
+
+def owner_token():
+    return st.secrets.get("SUPABASE_OWNER", "eu")
+
+def _serializa(msgs):
+    out = []
+    for m in msgs or []:
+        mm = dict(m)
+        if mm.get("imagem") is not None:
+            mm["imagem_b64"] = base64.b64encode(mm["imagem"]).decode()
+            mm.pop("imagem", None)
+        out.append(mm)
+    return out
+
+def _desserializa(msgs):
+    out = []
+    for m in msgs or []:
+        mm = dict(m)
+        if "imagem_b64" in mm:
+            mm["imagem"] = base64.b64decode(mm["imagem_b64"])
+            mm.pop("imagem_b64", None)
+        out.append(mm)
+    return out
+
+def carregar_sb():
+    c = sb()
+    if not c:
+        return
+    try:
+        r = c.table("conversas").select("*").eq("owner", owner_token()).order("atualizado_em", desc=True).execute()
+        convs = []
+        for d in r.data:
+            convs.append({"id": d["chave"], "title": d.get("titulo") or "Conversa",
+                          "persona": d.get("persona") or "Assistente Padrão",
+                          "messages": _desserializa(d.get("mensagens"))})
+        st.session_state.conversations = convs
+        if convs and not st.session_state.current_conv_id:
+            st.session_state.current_conv_id = convs[0]["id"]
+    except Exception as e:
+        st.session_state["erro_sb"] = f"Não consegui carregar do Supabase: {e}"
+
+def salvar_sb(conv):
+    c = sb()
+    if not c or not conv:
+        return
+    try:
+        c.table("conversas").upsert({
+            "owner": owner_token(), "chave": conv["id"], "titulo": conv.get("title"),
+            "persona": conv.get("persona"), "mensagens": _serializa(conv.get("messages", [])),
+            "atualizado_em": datetime.utcnow().isoformat()
+        }, on_conflict="owner,chave").execute()
+    except Exception as e:
+        st.session_state["erro_sb"] = f"Falha ao salvar no Supabase: {e}"
+
+def deletar_sb(chave):
+    c = sb()
+    if not c:
+        return
+    try:
+        c.table("conversas").delete().eq("owner", owner_token()).eq("chave", chave).execute()
+    except Exception:
+        pass
+
+if not st.session_state["_sb_carregado"]:
+    st.session_state["_sb_carregado"] = True
+    carregar_sb()
+
+# ================= VISÃO (Gemini 3.8 = nome que a Google indicou) =================
 def visao_config():
     if st.secrets.get("GEMINI_API_KEY"):
         return "gemini", None
@@ -48,7 +134,6 @@ def chamar_gemini(imagem_bytes, prompt_final):
         return None, f"Não consegui preparar a imagem ({type(e).__name__}: {str(e)[:120]})."
     erros = []
     quota = False
-    # 3.8-flash = o nome que a Google mandou usar; latest = apelido pro modelo atual (válido)
     for nome in ["gemini-3.8-flash", "gemini-flash-latest"]:
         try:
             mg = genai.GenerativeModel(nome, generation_config=cfg)
@@ -69,6 +154,7 @@ def chamar_gemini(imagem_bytes, prompt_final):
         return None, "⏳ Limite da camada grátis da Google atingido (429). Espere ~1 min e tente de novo."
     return None, "  •  ".join(erros)
 
+# ================= CSS (temas + upload claro + chips do topo) =================
 st.markdown("""
 <style>
 .btn-neutro { background: transparent; border: 1px solid #8b949e; border-radius: 6px; padding: 8px 16px; cursor: pointer; font-size: 14px; width: 100%; color: #8b949e; }
@@ -101,9 +187,11 @@ body:has(input[type="checkbox"]:checked) { background-color: #ffffff !important;
 </style>
 """, unsafe_allow_html=True)
 
+# ================= SIDEBAR =================
 with st.sidebar:
     st.title("⚙️ Configurações")
     st.checkbox("☀️ Modo claro", help="Desmarcado = tema escuro")
+    modo_entrada = st.radio("🎙️ Forma de falar:", ["⌨️ Digitar", "🎤 Microfone"], horizontal=True)
     st.divider()
     persona = st.selectbox("🎭 Personalidade da IA:", ["Assistente Padrão", "Professor Didático", "Programador Sênior", "Amigo Informal"])
     st.divider()
@@ -125,6 +213,7 @@ with st.sidebar:
                     st.session_state[f"renaming_{conv['id']}"] = True
             with col_delete:
                 if st.button("🗑️ Deletar", key=f"del_{conv['id']}", use_container_width=True):
+                    deletar_sb(conv["id"])
                     st.session_state.conversations = [c for c in st.session_state.conversations if c["id"] != conv["id"]]
                     if st.session_state.current_conv_id == conv["id"]:
                         st.session_state.current_conv_id = None
@@ -136,6 +225,7 @@ with st.sidebar:
                     with col_save:
                         if st.button("💾 Salvar", key=f"save_{conv['id']}", use_container_width=True):
                             conv["title"] = new_name
+                            salvar_sb(conv)
                             st.session_state[f"renaming_{conv['id']}"] = False
                             st.rerun()
                     with col_cancel:
@@ -151,6 +241,7 @@ with st.sidebar:
         st.caption(f"👁️ Visão: ✅ Groq ({tipo_v})")
     else:
         st.caption(f"👁️ Visão: ❌ {mot_v}")
+    st.caption(f"💾 Persistência: {'✅ Supabase ligado' if sb() else '⚪ só memória (configure Supabase)'}")
     upload = st.file_uploader("PDF, TXT ou imagem", type=["pdf", "txt", "png", "jpg", "jpeg"], label_visibility="collapsed")
     if upload is not None:
         ext = upload.name.split(".")[-1].lower()
@@ -177,7 +268,6 @@ with st.sidebar:
         st.session_state.documento = None
         st.session_state.imagem = None
         st.session_state["erro_gemini"] = None
-        st.session_state["status_visao"] = None
         st.rerun()
     st.divider()
     conv_atual = next((c for c in st.session_state.conversations if c["id"] == st.session_state.current_conv_id), None)
@@ -190,13 +280,13 @@ with st.sidebar:
     st.divider()
     st.caption("Feito com Streamlit + Groq 🚀")
 
+# ================= PROMPTS / CONVERSA ATUAL =================
 prompts = {
     "Assistente Padrão": "Você é um assistente útil, direto e fala português brasileiro.",
     "Professor Didático": "Você é um professor paciente e didático. Explica conceitos complexos de forma simples. Fala português brasileiro.",
     "Programador Sênior": "Você é um engenheiro de software sênior. Foca em código limpo e boas práticas. Fala português brasileiro.",
     "Amigo Informal": "Você é um amigo próximo e descontraído. Usa gírias leves, é empático. Fala português brasileiro."
 }
-
 if st.session_state.current_conv_id:
     current_conv = next((c for c in st.session_state.conversations if c["id"] == st.session_state.current_conv_id), None)
     if current_conv:
@@ -210,6 +300,8 @@ else:
     system_prompt = prompts[persona]
 system_prompt += " Detecte o idioma da mensagem do usuário e responda exatamente no mesmo idioma, a menos que ele peça outro idioma."
 
+if st.session_state.get("erro_sb"):
+    st.warning(f"⚠️ {st.session_state['erro_sb']}")
 if st.session_state.get("erro_gemini"):
     st.error(f"❌ {st.session_state['erro_gemini']}")
 
@@ -218,8 +310,9 @@ if st.session_state.current_conv_id and current_conv:
     st.caption(f"🎭 {current_conv.get('persona', persona)} • 📊 {len(st.session_state.messages)} mensagens")
 else:
     st.title("🤖 Minha IA Pessoal")
-    st.info("👈 Clique em **Nova Conversa** ou digite sua primeira mensagem abaixo!")
+    st.info("👈 Clique em **Nova Conversa** ou fale/digite sua primeira mensagem abaixo!")
 
+# ================= HISTÓRICO (com imagem inline) =================
 for idx, message in enumerate(st.session_state.messages):
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
@@ -260,6 +353,7 @@ for idx, message in enumerate(st.session_state.messages):
                 </script>
                 """, height=50, width=130, scrolling=False)
 
+# ================= BUSCA WEB =================
 def pesquisar_na_web(consulta):
     try:
         with DDGS() as ddgs:
@@ -268,21 +362,41 @@ def pesquisar_na_web(consulta):
             return "Nenhuma informação recente encontrada."
     except Exception: return "Erro ao buscar na web."
 
-if prompt := st.chat_input("Digite sua mensagem..."):
+# ================= ENTRADA (voz OU texto) =================
+prompt = None
+if modo_entrada.startswith("🎤"):
+    audio = st.audio_input("🎤 Grave sua mensagem (clique no microfone, fale, pare)", key="mic")
+    if audio is not None:
+        h = hashlib.md5(audio.getvalue()).hexdigest()
+        if h != st.session_state.get("hash_audio_ultimo"):
+            st.session_state["hash_audio_ultimo"] = h
+            with st.spinner("🎧 Transcrevendo sua fala..."):
+                try:
+                    cl = Groq(api_key=st.secrets["GROQ_API_KEY"])
+                    f = io.BytesIO(audio.getvalue())
+                    f.name = "audio.wav"
+                    prompt = cl.audio.transcriptions.create(model="whisper-large-v3-turbo", file=f).text
+                except Exception as e:
+                    st.error(f"Falha na transcrição (Whisper/Groq): {e}")
+else:
+    prompt = st.chat_input("Digite sua mensagem...")
+
+# ================= GERAR RESPOSTA =================
+if prompt:
     st.session_state["erro_gemini"] = None
-    st.session_state["status_visao"] = None
     if not st.session_state.current_conv_id:
         new_conv = {"id": datetime.now().strftime("%Y%m%d_%H%M%S"), "title": prompt[:30] + "..." if len(prompt) > 30 else prompt, "messages": [], "persona": persona}
         st.session_state.conversations.append(new_conv)
         st.session_state.current_conv_id = new_conv["id"]
         st.session_state.messages = []
         st.rerun()
+
     nova_msg = {"role": "user", "content": prompt}
     if st.session_state.imagem:
         nova_msg["imagem"] = st.session_state.imagem["bytes"]
     st.session_state.messages.append(nova_msg)
     current_conv = next((c for c in st.session_state.conversations if c["id"] == st.session_state.current_conv_id), None)
-    if current_conv and len(current_conv["messages"]) == 0:
+    if current_conv and len(current_conv["messages"]) == 1:
         current_conv["title"] = prompt[:30] + "..." if len(prompt) > 30 else prompt
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -310,7 +424,6 @@ if prompt := st.chat_input("Digite sua mensagem..."):
     if st.session_state.imagem:
         tipo_v, _ = visao_config()
         if tipo_v == "gemini":
-            st.session_state["status_visao"] = "👁️ Analisando imagem com Gemini..."
             txt, err = chamar_gemini(st.session_state.imagem["bytes"], f"{system_prompt}\n\nPergunta do usuário: {mensagem_para_ia}")
             if txt:
                 resposta_especial = txt
@@ -327,8 +440,6 @@ if prompt := st.chat_input("Digite sua mensagem..."):
 
     resposta = None
     with st.chat_message("assistant"):
-        if st.session_state.imagem and st.session_state.get("status_visao"):
-            st.caption(st.session_state["status_visao"])
         with st.spinner("🤔 Pensando..."):
             if resposta_especial is not None and resposta_especial.strip():
                 resposta = resposta_especial
@@ -345,5 +456,7 @@ if prompt := st.chat_input("Digite sua mensagem..."):
                 st.markdown(resposta)
     if resposta is not None:
         st.session_state.messages.append({"role": "assistant", "content": resposta})
-        if current_conv: current_conv["messages"] = st.session_state.messages.copy()
+        if current_conv:
+            current_conv["messages"] = st.session_state.messages.copy()
+            salvar_sb(current_conv)
     st.rerun()
