@@ -16,7 +16,7 @@ if "current_conv_id" not in st.session_state:
 # --- CSS: TEMA CLARO INSTANTÂNEO (ativa quando o checkbox está marcado) ---
 st.markdown("""
 <style>
-/* Botões isolados (Ouvir/Copiar): cor neutra que funciona nos dois temas */
+/* ===== Botões isolados (Ouvir/Copiar): cinza neutro, visível nos 2 temas ===== */
 .btn-neutro {
     background: transparent;
     border: 1px solid #8b949e;
@@ -29,12 +29,20 @@ st.markdown("""
 }
 .btn-neutro:hover { border-color: #b1bac4; color: #b1bac4; }
 
-/* ============ MODO CLARO (quando o checkbox está marcado) ============ */
+/* ===== Bolhas do chat arredondadas ===== */
+.stChatMessage { border-radius: 12px; }
+
+/* =====================================================
+   MODO CLARO (ativa com a caixinha "Modo claro" marcada)
+   ===================================================== */
 .stApp:has(input[type="checkbox"]:checked) {
     background-color: #ffffff !important;
 }
 .stApp:has(input[type="checkbox"]:checked) * {
     color: #262730 !important;
+}
+body:has(input[type="checkbox"]:checked) {
+    background-color: #ffffff !important;
 }
 .stApp:has(input[type="checkbox"]:checked) .stSidebar,
 .stApp:has(input[type="checkbox"]:checked) .stSidebar > div {
@@ -56,8 +64,13 @@ st.markdown("""
 .stApp:has(input[type="checkbox"]:checked) [data-testid="stChatInputContainer"],
 .stApp:has(input[type="checkbox"]:checked) .stChatInputContainer,
 .stApp:has(input[type="checkbox"]:checked) [data-testid="stChatInput"],
-.stApp:has(input[type="checkbox"]:checked) .stChatInput {
+.stApp:has(input[type="checkbox"]:checked) .stChatInput,
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stChatInput"] div,
+.stApp:has(input[type="checkbox"]:checked) .stChatInput div,
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stBottom"],
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stBottomBlockContainer"] {
     background-color: #ffffff !important;
+    border-color: #d0d7de !important;
 }
 .stApp:has(input[type="checkbox"]:checked) .stButton > button {
     background-color: #ffffff !important;
@@ -93,51 +106,21 @@ st.markdown("""
     background-color: #f6f8fa !important;
 }
 
-/* ===== CORREÇÃO: faixas do topo e de baixo no modo claro ===== */
-body:has(input[type="checkbox"]:checked) {
-    background-color: #ffffff !important;
-}
-.stApp:has(input[type="checkbox"]:checked) [data-testid="stHeader"],
-.stApp:has(input[type="checkbox"]:checked) [data-testid="stTop"],
-.stApp:has(input[type="checkbox"]:checked) header,
-.stApp:has(input[type="checkbox"]:checked) [data-testid="stBottom"],
-.stApp:has(input[type="checkbox"]:checked) [data-testid="stBottomBlockContainer"],
-.stApp:has(input[type="checkbox"]:checked) [data-testid="stChatInputContainer"],
-.stApp:has(input[type="checkbox"]:checked) .stChatInputContainer {
-    background-color: #ffffff !important;
-    background-image: none !important;
-}
-
-/* ===== FIX: caixa de digitação branca no modo claro ===== */
-.stApp:has(input[type="checkbox"]:checked) [data-testid="stChatInput"],
-.stApp:has(input[type="checkbox"]:checked) [data-testid="stChatInput"] div,
-.stApp:has(input[type="checkbox"]:checked) .stChatInput,
-.stApp:has(input[type="checkbox"]:checked) .stChatInput div {
-    background-color: #ffffff !important;
-    border-color: #d0d7de !important;
-}
-
-/* ===== FIX: ícones do topo visíveis no modo claro ===== */
-.stApp:has(input[type="checkbox"]:checked) [data-testid="stHeader"] svg,
-.stApp:has(input[type="checkbox"]:checked) header svg {
-    fill: #262730 !important;
-}
-
-/* ===== Topo branco e limpo no modo claro ===== */
+/* ===== Topo branco com botões em "chips" escuros (ícones visíveis) ===== */
 .stApp:has(input[type="checkbox"]:checked) [data-testid="stHeader"],
 .stApp:has(input[type="checkbox"]:checked) [data-testid="stToolbar"],
 .stApp:has(input[type="checkbox"]:checked) header {
     background-color: #ffffff !important;
 }
-.stApp:has(input[type="checkbox"]:checked) [data-testid="stHeader"] svg,
-.stApp:has(input[type="checkbox"]:checked) [data-testid="stToolbar"] svg {
-    display: none !important;
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stHeader"] button,
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stToolbar"] button {
+    background-color: #0e1117 !important;
+    border-radius: 8px !important;
 }
-/* Mantém o menu ⋮ (três pontinhos) visível */
-.stApp:has(input[type="checkbox"]:checked) [data-testid="stMainMenu"] svg {
-    display: inline !important;
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stHeader"] button *,
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stToolbar"] button * {
+    color: #fafafa !important;
 }
-.stChatMessage { border-radius: 12px; }
 </style>
 """, unsafe_allow_html=True)
 
