@@ -92,6 +92,21 @@ st.markdown("""
 .stApp:has(input[type="checkbox"]:checked) .stStatusWidget {
     background-color: #f6f8fa !important;
 }
+
+/* ===== CORREÇÃO: faixas do topo e de baixo no modo claro ===== */
+body:has(input[type="checkbox"]:checked) {
+    background-color: #ffffff !important;
+}
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stHeader"],
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stTop"],
+.stApp:has(input[type="checkbox"]:checked) header,
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stBottom"],
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stBottomBlockContainer"],
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stChatInputContainer"],
+.stApp:has(input[type="checkbox"]:checked) .stChatInputContainer {
+    background-color: #ffffff !important;
+    background-image: none !important;
+}
 .stChatMessage { border-radius: 12px; }
 </style>
 """, unsafe_allow_html=True)
