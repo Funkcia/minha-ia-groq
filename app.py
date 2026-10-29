@@ -6,6 +6,7 @@ import streamlit.components.v1 as components
 import base64
 import io
 from pypdf import PdfReader
+import google.generativeai as genai
 
 st.set_page_config(page_title="Minha IA Pessoal", page_icon="🤖", layout="wide")
 
@@ -14,20 +15,27 @@ for chave, valor in [("conversations", []), ("current_conv_id", None), ("documen
     if chave not in st.session_state:
         st.session_state[chave] = valor
 
-# --- DETECÇÃO AUTOMÁTICA DE MODELO DE VISÃO ---
+# --- DETECÇÃO DE MODELO DE VISÃO (agora usa Gemini) ---
 @st.cache_data(ttl=3600)
 def modelo_visao_disponivel():
+    # Tenta Gemini primeiro (tem visão gratuita)
+    if "GEMINI_API_KEY" in st.secrets:
+        try:
+            return "gemini"
+        except Exception:
+            pass
+    # Fallback: verifica se Groq tem algum de visão
     try:
         c = Groq(api_key=st.secrets["GROQ_API_KEY"])
         ids = [m.id for m in c.models.list()]
-        prefs = ["llama-4-scout", "llama-4-maverick", "scout-17b-16e", "maverick-17b-128e", "vision", "llama-3.2-90b-vision", "llama-3.2-11b-vision", "pixtral"]
+        prefs = ["vision", "scout", "maverick"]
         for p in prefs:
             for mid in ids:
                 if p in mid:
                     return mid
-        return None
     except Exception:
-        return None
+        pass
+    return None
 
 # --- CSS COMPLETO ---
 st.markdown("""
@@ -329,9 +337,22 @@ if prompt := st.chat_input("Digite sua mensagem..."):
 
     modelo = "openai/gpt-oss-120b"
     conteudo_usuario = mensagem_para_ia
+    resposta_especial = None
     if st.session_state.imagem:
         modelo_visao = modelo_visao_disponivel()
-        if modelo_visao:
+        if modelo_visao == "gemini":
+            try:
+                genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+                model_gemini = genai.GenerativeModel("gemini-2.0-flash-exp")
+                img = st.session_state.imagem
+                # Converte imagem base64 para o formato Gemini
+                from PIL import Image
+                imagem_pil = Image.open(io.BytesIO(img["bytes"]))
+                prompt_final = f"{system_prompt}\n\nPergunta: {mensagem_para_ia}"
+                resposta_especial = model_gemini.generate_content([prompt_final, imagem_pil]).text
+            except Exception as e:
+                st.warning(f"Erro na Gemini: {e}")
+        elif modelo_visao:
             modelo = modelo_visao
             img = st.session_state.imagem
             conteudo_usuario = [
@@ -343,10 +364,13 @@ if prompt := st.chat_input("Digite sua mensagem..."):
 
     with st.chat_message("assistant"):
         with st.spinner("🤔 Pensando..."):
-            client = Groq(api_key=st.secrets["GROQ_API_KEY"])
-            mensagens_envio = [{"role": "system", "content": system_prompt}] + st.session_state.messages[:-1] + [{"role": "user", "content": conteudo_usuario}]
-            response = client.chat.completions.create(model=modelo, messages=mensagens_envio, temperature=0.7, max_tokens=1024)
-            resposta = response.choices[0].message.content
+            if resposta_especial is not None:
+                resposta = resposta_especial
+            else:
+                client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+                mensagens_envio = [{"role": "system", "content": system_prompt}] + st.session_state.messages[:-1] + [{"role": "user", "content": conteudo_usuario}]
+                response = client.chat.completions.create(model=modelo, messages=mensagens_envio, temperature=0.7, max_tokens=1024)
+                resposta = response.choices[0].message.content
             st.markdown(resposta)
 
     st.session_state.messages.append({"role": "assistant", "content": resposta})
