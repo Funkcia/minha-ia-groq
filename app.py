@@ -34,19 +34,19 @@ def chamar_gemini(imagem_bytes, prompt_final):
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     from PIL import Image
     img_pil = Image.open(io.BytesIO(imagem_bytes))
+    cfg = genai.types.GenerationConfig(max_output_tokens=400, temperature=0.4)
     ultimo = None
-    for nome in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest", "gemini-2.0-flash-exp", "gemini-1.5-flash"]:
+    for nome in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]:
         try:
-            mg = genai.GenerativeModel(nome)
-            r = mg.generate_content([prompt_final, img_pil])
-            fb = getattr(r, "prompt_feedback", None)
+            mg = genai.GenerativeModel(nome, generation_config=cfg)
+            r = mg.generate_content([prompt_final, img_pil], request_options={"timeout": 90})
             try:
                 txt = r.text
             except Exception:
                 txt = ""
             if txt and txt.strip():
                 return txt, None
-            ultimo = f"[{nome}] vazio/bloqueado (feedback={fb})"
+            ultimo = f"[{nome}] vazio/bloqueado"
         except Exception as e:
             ultimo = f"[{nome}] {e}"
     return None, ultimo
