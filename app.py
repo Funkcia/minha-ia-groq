@@ -3,6 +3,9 @@ from groq import Groq
 from ddgs import DDGS
 from datetime import datetime
 import streamlit.components.v1 as components
+import base64
+import io
+from pypdf import PdfReader
 
 # Configuração da página
 st.set_page_config(page_title="Minha IA Pessoal", page_icon="🤖", layout="wide")
@@ -12,6 +15,11 @@ if "conversations" not in st.session_state:
     st.session_state.conversations = []
 if "current_conv_id" not in st.session_state:
     st.session_state.current_conv_id = None
+
+if "documento" not in st.session_state:
+    st.session_state.documento = None
+if "imagem" not in st.session_state:
+    st.session_state.imagem = None
 
 # --- CSS: TEMA CLARO INSTANTÂNEO (ativa quando o checkbox está marcado) ---
 st.markdown("""
@@ -175,6 +183,42 @@ with st.sidebar:
                             st.session_state[f"renaming_{conv['id']}"] = False
                             st.rerun()
 
+            st.divider()
+    st.subheader("📎 Arquivos")
+    upload = st.file_uploader("PDF, TXT ou imagem", type=["pdf", "txt", "png", "jpg", "jpeg"], label_visibility="collapsed")
+
+    if upload is not None:
+        ext = upload.name.split(".")[-1].lower()
+        if ext == "txt":
+            st.session_state.documento = {"nome": upload.name, "texto": upload.getvalue().decode("utf-8", errors="ignore")}
+            st.session_state.imagem = None
+        elif ext == "pdf":
+            try:
+                reader = PdfReader(io.BytesIO(upload.getvalue()))
+                texto_pdf = "\n".join([(p.extract_text() or "") for p in reader.pages])
+                st.session_state.documento = {"nome": upload.name, "texto": texto_pdf}
+                st.session_state.imagem = None
+                st.success(f"📄 {len(reader.pages)} página(s) carregadas!")
+            except Exception:
+                st.error("Não consegui ler este PDF.")
+        else:
+            st.session_state.imagem = {
+                "nome": upload.name,
+                "base64": base64.b64encode(upload.getvalue()).decode(),
+                "mime": upload.type,
+                "bytes": upload.getvalue(),
+            }
+            st.session_state.documento = None
+
+    if st.session_state.documento:
+        st.success(f"📄 Documento ativo: {st.session_state.documento['nome']}")
+    if st.session_state.imagem:
+        st.image(st.session_state.imagem["bytes"], width=180)
+    if (st.session_state.documento or st.session_state.imagem) and st.button("🗑️ Remover arquivo", use_container_width=True):
+        st.session_state.documento = None
+        st.session_state.imagem = None
+        st.rerun()
+
         st.divider()
     conv_atual = next((c for c in st.session_state.conversations if c["id"] == st.session_state.current_conv_id), None)
     if conv_atual and conv_atual.get("messages"):
@@ -291,12 +335,16 @@ if prompt := st.chat_input("Digite sua mensagem..."):
         st.session_state.messages = []
         st.rerun()
 
-    st.session_state.messages.append({"role": "user", "content": prompt})
+    texto_exibido = prompt
+    if st.session_state.imagem:
+        texto_exibido += f"\n\n🖼️ *[imagem anexada: {st.session_state.imagem['nome']}]*"
+
+    st.session_state.messages.append({"role": "user", "content": texto_exibido})
     current_conv = next((c for c in st.session_state.conversations if c["id"] == st.session_state.current_conv_id), None)
     if current_conv and len(current_conv["messages"]) == 0:
         current_conv["title"] = prompt[:30] + "..." if len(prompt) > 30 else prompt
 
-    with st.chat_message("user"): st.markdown(prompt)
+    with st.chat_message("user"): st.markdown(texto_exibido)
 
     palavras_chave = ["quem ganhou", "eleições", "hoje", "atual", "preço", "notícia", "2026", "2025", "resultado", "últimas", "quanto está", "cotação"]
     precisa_buscar = any(palavra in prompt.lower() for palavra in palavras_chave)
@@ -309,11 +357,28 @@ if prompt := st.chat_input("Digite sua mensagem..."):
             status.update(label="✅ Busca concluída!", state="complete", expanded=False)
             mensagem_para_ia = f"Use este contexto da web para responder:\n{contexto}\n\nPergunta: {prompt}"
 
+    # Anexa documento (PDF/TXT) como contexto
+    if st.session_state.documento:
+        doc = st.session_state.documento
+        texto_doc = doc["texto"][:15000]
+        mensagem_para_ia = f"Use o conteúdo do documento '{doc['nome']}' abaixo para responder:\n\n---INÍCIO DO DOCUMENTO---\n{texto_doc}\n---FIM DO DOCUMENTO---\n\nPergunta: {mensagem_para_ia}"
+
+    # Define o modelo (visão para imagens) e o conteúdo da mensagem
+    modelo = "openai/gpt-oss-120b"
+    conteudo_usuario = mensagem_para_ia
+    if st.session_state.imagem:
+        modelo = "meta-llama/llama-4-scout-17b-16e-instruct"
+        img = st.session_state.imagem
+        conteudo_usuario = [
+            {"type": "text", "text": mensagem_para_ia},
+            {"type": "image_url", "image_url": {"url": f"data:{img['mime']};base64,{img['base64']}"}},
+        ]
+
     with st.chat_message("assistant"):
         with st.spinner("🤔 Pensando..."):
             client = Groq(api_key=st.secrets["GROQ_API_KEY"])
-            mensagens_envio = [{"role": "system", "content": system_prompt}] + st.session_state.messages[:-1] + [{"role": "user", "content": mensagem_para_ia}]
-            response = client.chat.completions.create(model="openai/gpt-oss-120b", messages=mensagens_envio, temperature=0.7, max_tokens=1024)
+            mensagens_envio = [{"role": "system", "content": system_prompt}] + st.session_state.messages[:-1] + [{"role": "user", "content": conteudo_usuario}]
+            response = client.chat.completions.create(model=modelo, messages=mensagens_envio, temperature=0.7, max_tokens=1024)
             resposta = response.choices[0].message.content
             st.markdown(resposta)
 
