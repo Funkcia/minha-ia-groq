@@ -11,25 +11,20 @@ import google.generativeai as genai
 st.set_page_config(page_title="Minha IA Pessoal", page_icon="🤖", layout="wide")
 
 # --- ESTADO INICIAL ---
-for chave, valor in [("conversations", []), ("current_conv_id", None), ("documento", None), ("imagem", None), ("aviso_visao", False)]:
+for chave, valor in [("conversations", []), ("current_conv_id", None), ("documento", None),
+                     ("imagem", None), ("aviso_visao", False), ("erro_gemini", None)]:
     if chave not in st.session_state:
         st.session_state[chave] = valor
 
-# --- DETECÇÃO DE MODELO DE VISÃO (agora usa Gemini) ---
+# --- DETECÇÃO DE VISÃO (Gemini primeiro, Groq como reserva) ---
 @st.cache_data(ttl=3600)
 def modelo_visao_disponivel():
-    # Tenta Gemini primeiro (tem visão gratuita)
     if "GEMINI_API_KEY" in st.secrets:
-        try:
-            return "gemini"
-        except Exception:
-            pass
-    # Fallback: verifica se Groq tem algum de visão
+        return "gemini"
     try:
         c = Groq(api_key=st.secrets["GROQ_API_KEY"])
         ids = [m.id for m in c.models.list()]
-        prefs = ["vision", "scout", "maverick"]
-        for p in prefs:
+        for p in ["vision", "scout", "maverick"]:
             for mid in ids:
                 if p in mid:
                     return mid
@@ -37,24 +32,13 @@ def modelo_visao_disponivel():
         pass
     return None
 
-# --- CSS COMPLETO ---
+# --- CSS COMPLETO (temas + upload claro + chips do topo) ---
 st.markdown("""
 <style>
-/* Botões isolados (Ouvir/Copiar) */
-.btn-neutro {
-    background: transparent;
-    border: 1px solid #8b949e;
-    border-radius: 6px;
-    padding: 8px 16px;
-    cursor: pointer;
-    font-size: 14px;
-    width: 100%;
-    color: #8b949e;
-}
+.btn-neutro { background: transparent; border: 1px solid #8b949e; border-radius: 6px; padding: 8px 16px; cursor: pointer; font-size: 14px; width: 100%; color: #8b949e; }
 .btn-neutro:hover { border-color: #b1bac4; color: #b1bac4; }
 .stChatMessage { border-radius: 12px; }
 
-/* ============ MODO CLARO ============ */
 .stApp:has(input[type="checkbox"]:checked) { background-color: #ffffff !important; }
 .stApp:has(input[type="checkbox"]:checked) * { color: #262730 !important; }
 body:has(input[type="checkbox"]:checked) { background-color: #ffffff !important; }
@@ -87,7 +71,6 @@ body:has(input[type="checkbox"]:checked) { background-color: #ffffff !important;
 .stApp:has(input[type="checkbox"]:checked) [data-testid="stStatusWidget"],
 .stApp:has(input[type="checkbox"]:checked) .stStatusWidget { background-color: #f6f8fa !important; }
 
-/* Upload claro (área + botão interno) */
 .stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploader"],
 .stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploadDropzone"],
 .stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploadDropzone"] div,
@@ -95,16 +78,10 @@ body:has(input[type="checkbox"]:checked) { background-color: #ffffff !important;
 .stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploader"] section div { background-color: #ffffff !important; }
 .stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploadDropzone"] { border-color: #d0d7de !important; }
 .stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploader"] button,
-.stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploadDropzone"] button {
-    background-color: #ffffff !important;
-    border: 1px solid #d0d7de !important;
-}
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploadDropzone"] button { background-color: #ffffff !important; border: 1px solid #d0d7de !important; }
 .stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploader"] button,
-.stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploader"] button * {
-    color: #262730 !important;
-}
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploader"] button * { color: #262730 !important; }
 
-/* Topo branco com chips escuros */
 .stApp:has(input[type="checkbox"]:checked) [data-testid="stHeader"],
 .stApp:has(input[type="checkbox"]:checked) [data-testid="stToolbar"],
 .stApp:has(input[type="checkbox"]:checked) header { background-color: #ffffff !important; }
@@ -162,7 +139,9 @@ with st.sidebar:
 
     st.divider()
     st.subheader("📎 Arquivos")
-    st.caption(f"👁️ Modelo de visão: {modelo_visao_disponivel() or 'NENHUM na conta'}")
+    chave_gemini_ok = "GEMINI_API_KEY" in st.secrets
+    st.caption(f"👁️ Chave Gemini: {'✅ nos Secrets' if chave_gemini_ok else '❌ FALTANDO nos Secrets'}")
+    st.caption(f"👁️ Visão ativa: {modelo_visao_disponivel() or 'NENHUMA'}")
     upload = st.file_uploader("PDF, TXT ou imagem", type=["pdf", "txt", "png", "jpg", "jpeg"], label_visibility="collapsed")
 
     if upload is not None:
@@ -180,12 +159,7 @@ with st.sidebar:
             except Exception:
                 st.error("Não consegui ler este PDF.")
         else:
-            st.session_state.imagem = {
-                "nome": upload.name,
-                "base64": base64.b64encode(upload.getvalue()).decode(),
-                "mime": upload.type,
-                "bytes": upload.getvalue(),
-            }
+            st.session_state.imagem = {"nome": upload.name, "base64": base64.b64encode(upload.getvalue()).decode(), "mime": upload.type, "bytes": upload.getvalue()}
             st.session_state.documento = None
 
     if st.session_state.documento:
@@ -195,6 +169,8 @@ with st.sidebar:
     if (st.session_state.documento or st.session_state.imagem) and st.button("🗑️ Remover arquivo", use_container_width=True):
         st.session_state.documento = None
         st.session_state.imagem = None
+        st.session_state["erro_gemini"] = None
+        st.session_state["aviso_visao"] = False
         st.rerun()
 
     st.divider()
@@ -204,13 +180,7 @@ with st.sidebar:
         for m in conv_atual["messages"]:
             quem = "👤 Você" if m["role"] == "user" else "🤖 IA"
             linhas.append(f"{quem}: {m['content']}")
-        st.download_button(
-            "📥 Exportar conversa (TXT)",
-            data="\n\n".join(linhas),
-            file_name=f"conversa-{conv_atual['id']}.txt",
-            mime="text/plain",
-            use_container_width=True
-        )
+        st.download_button("📥 Exportar conversa (TXT)", data="\n\n".join(linhas), file_name=f"conversa-{conv_atual['id']}.txt", mime="text/plain", use_container_width=True)
 
     st.divider()
     st.caption("Feito com Streamlit + Groq 🚀")
@@ -236,13 +206,15 @@ else:
     st.session_state.messages = []
     system_prompt = prompts[persona]
 
-# --- REGRA DE IDIOMA ---
 system_prompt += " Detecte o idioma da mensagem do usuário e responda exatamente no mesmo idioma, a menos que ele peça outro idioma."
 
-# --- TÍTULO ---
-if st.session_state.get("aviso_visao"):
-    st.error("⚠️ Sua conta Groq não tem nenhum modelo de visão disponível agora, então a imagem foi ignorada. Veja na sidebar o nome do modelo detectado (ou 'NENHUM').")
+# --- AVISOS PERSISTENTES NO TOPO ---
+if st.session_state.get("erro_gemini"):
+    st.error(f"❌ {st.session_state['erro_gemini']}")
+elif st.session_state.get("aviso_visao"):
+    st.error("⚠️ Nenhuma visão disponível (Gemini sem chave e Groq sem modelo de visão). Veja o diagnóstico na sidebar.")
 
+# --- TÍTULO ---
 if st.session_state.current_conv_id and current_conv:
     st.title(f"💬 {current_conv['title']}")
     st.caption(f"🎭 {current_conv.get('persona', persona)} • 📊 {len(st.session_state.messages)} mensagens")
@@ -300,6 +272,9 @@ def pesquisar_na_web(consulta):
 
 # --- INPUT ---
 if prompt := st.chat_input("Digite sua mensagem..."):
+    st.session_state["erro_gemini"] = None
+    st.session_state["aviso_visao"] = False
+
     if not st.session_state.current_conv_id:
         new_conv = {"id": datetime.now().strftime("%Y%m%d_%H%M%S"), "title": prompt[:30] + "..." if len(prompt) > 30 else prompt, "messages": [], "persona": persona}
         st.session_state.conversations.append(new_conv)
@@ -310,7 +285,6 @@ if prompt := st.chat_input("Digite sua mensagem..."):
     texto_exibido = prompt
     if st.session_state.imagem:
         texto_exibido += f"\n\n📷 *[imagem anexada: {st.session_state.imagem['nome']}]*"
-        st.session_state["aviso_visao"] = False
 
     st.session_state.messages.append({"role": "user", "content": texto_exibido})
     current_conv = next((c for c in st.session_state.conversations if c["id"] == st.session_state.current_conv_id), None)
@@ -335,25 +309,36 @@ if prompt := st.chat_input("Digite sua mensagem..."):
         texto_doc = doc["texto"][:15000]
         mensagem_para_ia = f"Use o conteúdo do documento '{doc['nome']}' abaixo para responder:\n\n---INÍCIO DO DOCUMENTO---\n{texto_doc}\n---FIM DO DOCUMENTO---\n\nPergunta: {mensagem_para_ia}"
 
+    # --- ROTEAMENTO DE VISÃO ---
     modelo = "openai/gpt-oss-120b"
     conteudo_usuario = mensagem_para_ia
     resposta_especial = None
+    pular_groq = False
+
     if st.session_state.imagem:
-        modelo_visao = modelo_visao_disponivel()
-        if modelo_visao == "gemini":
+        mv = modelo_visao_disponivel()
+        if mv == "gemini":
             try:
                 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-                model_gemini = genai.GenerativeModel("gemini-2.0-flash-exp")
-                img = st.session_state.imagem
-                # Converte imagem base64 para o formato Gemini
                 from PIL import Image
-                imagem_pil = Image.open(io.BytesIO(img["bytes"]))
-                prompt_final = f"{system_prompt}\n\nPergunta: {mensagem_para_ia}"
-                resposta_especial = model_gemini.generate_content([prompt_final, imagem_pil]).text
+                imagem_pil = Image.open(io.BytesIO(st.session_state.imagem["bytes"]))
+                prompt_final = f"{system_prompt}\n\nPergunta do usuário: {mensagem_para_ia}"
+                ult_erro = None
+                for nome in ["gemini-flash-latest", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-exp", "gemini-1.5-flash"]:
+                    try:
+                        mg = genai.GenerativeModel(nome)
+                        resposta_especial = mg.generate_content([prompt_final, imagem_pil]).text
+                        break
+                    except Exception as e:
+                        ult_erro = f"[{nome}] {e}"
+                if resposta_especial is None:
+                    st.session_state["erro_gemini"] = f"Falha na Gemini ao ler a imagem → {ult_erro}"
+                    pular_groq = True
             except Exception as e:
-                st.warning(f"Erro na Gemini: {e}")
-        elif modelo_visao:
-            modelo = modelo_visao
+                st.session_state["erro_gemini"] = f"Erro ao configurar Gemini → {e}"
+                pular_groq = True
+        elif mv:
+            modelo = mv
             img = st.session_state.imagem
             conteudo_usuario = [
                 {"type": "text", "text": mensagem_para_ia},
@@ -361,18 +346,28 @@ if prompt := st.chat_input("Digite sua mensagem..."):
             ]
         else:
             st.session_state["aviso_visao"] = True
+            pular_groq = True
 
+    # --- GERAÇÃO DA RESPOSTA ---
+    resposta = None
     with st.chat_message("assistant"):
         with st.spinner("🤔 Pensando..."):
             if resposta_especial is not None:
                 resposta = resposta_especial
+                st.markdown(resposta)
+            elif pular_groq:
+                if st.session_state.get("erro_gemini"):
+                    st.error(f"❌ {st.session_state['erro_gemini']}")
+                else:
+                    st.error("❌ Nenhum modelo de visão disponível para esta imagem.")
             else:
                 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
                 mensagens_envio = [{"role": "system", "content": system_prompt}] + st.session_state.messages[:-1] + [{"role": "user", "content": conteudo_usuario}]
                 response = client.chat.completions.create(model=modelo, messages=mensagens_envio, temperature=0.7, max_tokens=1024)
                 resposta = response.choices[0].message.content
-            st.markdown(resposta)
+                st.markdown(resposta)
 
-    st.session_state.messages.append({"role": "assistant", "content": resposta})
-    if current_conv: current_conv["messages"] = st.session_state.messages.copy()
+    if resposta is not None:
+        st.session_state.messages.append({"role": "assistant", "content": resposta})
+        if current_conv: current_conv["messages"] = st.session_state.messages.copy()
     st.rerun()
