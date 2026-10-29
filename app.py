@@ -123,15 +123,19 @@ body:has(input[type="checkbox"]:checked) {
     fill: #262730 !important;
 }
 
-/* ===== Barra do topo escura no modo claro (ícones visíveis) ===== */
+/* ===== Topo branco e limpo no modo claro ===== */
 .stApp:has(input[type="checkbox"]:checked) [data-testid="stHeader"],
 .stApp:has(input[type="checkbox"]:checked) [data-testid="stToolbar"],
 .stApp:has(input[type="checkbox"]:checked) header {
-    background-color: #0e1117 !important;
+    background-color: #ffffff !important;
 }
-.stApp:has(input[type="checkbox"]:checked) [data-testid="stHeader"] *,
-.stApp:has(input[type="checkbox"]:checked) [data-testid="stToolbar"] * {
-    color: #fafafa !important;
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stHeader"] svg,
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stToolbar"] svg {
+    display: none !important;
+}
+/* Mantém o menu ⋮ (três pontinhos) visível */
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stMainMenu"] svg {
+    display: inline !important;
 }
 .stChatMessage { border-radius: 12px; }
 </style>
