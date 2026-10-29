@@ -122,6 +122,22 @@ body:has(input[type="checkbox"]:checked) {
 .stApp:has(input[type="checkbox"]:checked) header svg {
     fill: #262730 !important;
 }
+
+/* ===== FIX FINAL: ícones estrela/lápis/GitHub no modo claro ===== */
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stHeader"] svg,
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stHeader"] svg *,
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stToolbar"] svg,
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stToolbar"] svg *,
+.stApp:has(input[type="checkbox"]:checked) header svg,
+.stApp:has(input[type="checkbox"]:checked) header svg * {
+    fill: #262730 !important;
+    stroke: #262730 !important;
+}
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stHeader"] img,
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stToolbar"] img,
+.stApp:has(input[type="checkbox"]:checked) header img {
+    filter: invert(0.8) !important;
+}
 .stChatMessage { border-radius: 12px; }
 </style>
 """, unsafe_allow_html=True)
