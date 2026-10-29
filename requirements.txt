@@ -3,3 +3,4 @@ python-dotenv
 ddgs
 streamlit
 pypdf
+google-generativeai
