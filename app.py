@@ -7,24 +7,32 @@ import base64
 import io
 from pypdf import PdfReader
 
-# Configuração da página
 st.set_page_config(page_title="Minha IA Pessoal", page_icon="🤖", layout="wide")
 
 # --- ESTADO INICIAL ---
-if "conversations" not in st.session_state:
-    st.session_state.conversations = []
-if "current_conv_id" not in st.session_state:
-    st.session_state.current_conv_id = None
+for chave, valor in [("conversations", []), ("current_conv_id", None), ("documento", None), ("imagem", None), ("aviso_visao", False)]:
+    if chave not in st.session_state:
+        st.session_state[chave] = valor
 
-if "documento" not in st.session_state:
-    st.session_state.documento = None
-if "imagem" not in st.session_state:
-    st.session_state.imagem = None
+# --- DETECÇÃO AUTOMÁTICA DE MODELO DE VISÃO ---
+@st.cache_data(ttl=3600)
+def modelo_visao_disponivel():
+    try:
+        c = Groq(api_key=st.secrets["GROQ_API_KEY"])
+        ids = [m.id for m in c.models.list()]
+        prefs = ["llama-4-scout", "llama-4-maverick", "scout-17b-16e", "maverick-17b-128e", "vision", "llama-3.2-90b-vision", "llama-3.2-11b-vision", "pixtral"]
+        for p in prefs:
+            for mid in ids:
+                if p in mid:
+                    return mid
+        return None
+    except Exception:
+        return None
 
-# --- CSS: TEMA CLARO INSTANTÂNEO (ativa quando o checkbox está marcado) ---
+# --- CSS COMPLETO ---
 st.markdown("""
 <style>
-/* ===== Botões isolados (Ouvir/Copiar): cinza neutro, visível nos 2 temas ===== */
+/* Botões isolados (Ouvir/Copiar) */
 .btn-neutro {
     background: transparent;
     border: 1px solid #8b949e;
@@ -36,55 +44,19 @@ st.markdown("""
     color: #8b949e;
 }
 .btn-neutro:hover { border-color: #b1bac4; color: #b1bac4; }
-
-/* ===== Upload de arquivos claro no modo claro ===== */
-.stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploader"],
-.stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploadDropzone"],
-.stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploadDropzone"] div,
-.stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploader"] section,
-.stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploader"] section div {
-    background-color: #ffffff !important;
-}
-.stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploadDropzone"] {
-    border-color: #d0d7de !important;
-}
-.stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploadDropzone"] button {
-    background-color: #ffffff !important;
-    border: 1px solid #d0d7de !important;
-}
-
-/* ===== Bolhas do chat arredondadas ===== */
 .stChatMessage { border-radius: 12px; }
 
-/* =====================================================
-   MODO CLARO (ativa com a caixinha "Modo claro" marcada)
-   ===================================================== */
-.stApp:has(input[type="checkbox"]:checked) {
-    background-color: #ffffff !important;
-}
-.stApp:has(input[type="checkbox"]:checked) * {
-    color: #262730 !important;
-}
-body:has(input[type="checkbox"]:checked) {
-    background-color: #ffffff !important;
-}
+/* ============ MODO CLARO ============ */
+.stApp:has(input[type="checkbox"]:checked) { background-color: #ffffff !important; }
+.stApp:has(input[type="checkbox"]:checked) * { color: #262730 !important; }
+body:has(input[type="checkbox"]:checked) { background-color: #ffffff !important; }
 .stApp:has(input[type="checkbox"]:checked) .stSidebar,
-.stApp:has(input[type="checkbox"]:checked) .stSidebar > div {
-    background-color: #f6f8fa !important;
-}
-.stApp:has(input[type="checkbox"]:checked) .stChatMessage {
-    background-color: #f6f8fa !important;
-    border: 1px solid #d0d7de !important;
-}
+.stApp:has(input[type="checkbox"]:checked) .stSidebar > div { background-color: #f6f8fa !important; }
+.stApp:has(input[type="checkbox"]:checked) .stChatMessage { background-color: #f6f8fa !important; border: 1px solid #d0d7de !important; }
 .stApp:has(input[type="checkbox"]:checked) .stChatInput textarea,
-.stApp:has(input[type="checkbox"]:checked) [data-testid="stChatInput"] textarea {
-    background-color: #ffffff !important;
-    caret-color: #262730 !important;
-}
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stChatInput"] textarea { background-color: #ffffff !important; caret-color: #262730 !important; }
 .stApp:has(input[type="checkbox"]:checked) .stChatInput textarea::placeholder,
-.stApp:has(input[type="checkbox"]:checked) [data-testid="stChatInput"] textarea::placeholder {
-    color: #808495 !important;
-}
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stChatInput"] textarea::placeholder { color: #808495 !important; }
 .stApp:has(input[type="checkbox"]:checked) [data-testid="stChatInputContainer"],
 .stApp:has(input[type="checkbox"]:checked) .stChatInputContainer,
 .stApp:has(input[type="checkbox"]:checked) [data-testid="stChatInput"],
@@ -92,72 +64,55 @@ body:has(input[type="checkbox"]:checked) {
 .stApp:has(input[type="checkbox"]:checked) [data-testid="stChatInput"] div,
 .stApp:has(input[type="checkbox"]:checked) .stChatInput div,
 .stApp:has(input[type="checkbox"]:checked) [data-testid="stBottom"],
-.stApp:has(input[type="checkbox"]:checked) [data-testid="stBottomBlockContainer"] {
-    background-color: #ffffff !important;
-    border-color: #d0d7de !important;
-}
-.stApp:has(input[type="checkbox"]:checked) .stButton > button {
-    background-color: #ffffff !important;
-    border: 1px solid #d0d7de !important;
-}
-.stApp:has(input[type="checkbox"]:checked) .stButton > button:hover {
-    background-color: #f0f2f6 !important;
-}
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stBottomBlockContainer"] { background-color: #ffffff !important; border-color: #d0d7de !important; }
+.stApp:has(input[type="checkbox"]:checked) .stButton > button { background-color: #ffffff !important; border: 1px solid #d0d7de !important; }
+.stApp:has(input[type="checkbox"]:checked) .stButton > button:hover { background-color: #f0f2f6 !important; }
 .stApp:has(input[type="checkbox"]:checked) [data-testid="stSelectbox"] div,
-.stApp:has(input[type="checkbox"]:checked) [data-testid="stSelectbox"] div div {
-    background-color: #ffffff !important;
-}
-.stApp:has(input[type="checkbox"]:checked) hr {
-    border-color: #d0d7de !important;
-}
-.stApp:has(input[type="checkbox"]:checked) .stCaption {
-    color: #57606a !important;
-}
-.stApp:has(input[type="checkbox"]:checked) .stTextInput > div > div > input {
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stSelectbox"] div div { background-color: #ffffff !important; }
+.stApp:has(input[type="checkbox"]:checked) hr { border-color: #d0d7de !important; }
+.stApp:has(input[type="checkbox"]:checked) .stCaption { color: #57606a !important; }
+.stApp:has(input[type="checkbox"]:checked) .stTextInput > div > div > input { background-color: #ffffff !important; border: 1px solid #d0d7de !important; }
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stExpander"] details,
+.stApp:has(input[type="checkbox"]:checked) .streamlit-expanderHeader { background-color: #ffffff !important; }
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stAlert"],
+.stApp:has(input[type="checkbox"]:checked) .stAlert { background-color: #f6f8fa !important; }
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stStatusWidget"],
+.stApp:has(input[type="checkbox"]:checked) .stStatusWidget { background-color: #f6f8fa !important; }
+
+/* Upload claro (área + botão interno) */
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploader"],
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploadDropzone"],
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploadDropzone"] div,
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploader"] section,
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploader"] section div { background-color: #ffffff !important; }
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploadDropzone"] { border-color: #d0d7de !important; }
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploader"] button,
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploadDropzone"] button {
     background-color: #ffffff !important;
     border: 1px solid #d0d7de !important;
 }
-.stApp:has(input[type="checkbox"]:checked) [data-testid="stExpander"] details,
-.stApp:has(input[type="checkbox"]:checked) .streamlit-expanderHeader {
-    background-color: #ffffff !important;
-}
-.stApp:has(input[type="checkbox"]:checked) [data-testid="stAlert"],
-.stApp:has(input[type="checkbox"]:checked) .stAlert {
-    background-color: #f6f8fa !important;
-}
-.stApp:has(input[type="checkbox"]:checked) [data-testid="stStatusWidget"],
-.stApp:has(input[type="checkbox"]:checked) .stStatusWidget {
-    background-color: #f6f8fa !important;
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploader"] button,
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stFileUploader"] button * {
+    color: #262730 !important;
 }
 
-/* ===== Topo branco com botões em "chips" escuros (ícones visíveis) ===== */
+/* Topo branco com chips escuros */
 .stApp:has(input[type="checkbox"]:checked) [data-testid="stHeader"],
 .stApp:has(input[type="checkbox"]:checked) [data-testid="stToolbar"],
-.stApp:has(input[type="checkbox"]:checked) header {
-    background-color: #ffffff !important;
-}
+.stApp:has(input[type="checkbox"]:checked) header { background-color: #ffffff !important; }
 .stApp:has(input[type="checkbox"]:checked) [data-testid="stHeader"] button,
-.stApp:has(input[type="checkbox"]:checked) [data-testid="stToolbar"] button {
-    background-color: #0e1117 !important;
-    border-radius: 8px !important;
-}
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stToolbar"] button { background-color: #0e1117 !important; border-radius: 8px !important; }
 .stApp:has(input[type="checkbox"]:checked) [data-testid="stHeader"] button *,
-.stApp:has(input[type="checkbox"]:checked) [data-testid="stToolbar"] button * {
-    color: #fafafa !important;
-}
+.stApp:has(input[type="checkbox"]:checked) [data-testid="stToolbar"] button * { color: #fafafa !important; }
 </style>
 """, unsafe_allow_html=True)
 
 # --- SIDEBAR ---
 with st.sidebar:
     st.title("⚙️ Configurações")
-
-    # Interruptor de tema (instantâneo, mesma aba)
     st.checkbox("☀️ Modo claro", help="Desmarcado = tema escuro")
-
     st.divider()
     persona = st.selectbox("🎭 Personalidade da IA:", ["Assistente Padrão", "Professor Didático", "Programador Sênior", "Amigo Informal"])
-
     st.divider()
     st.subheader("💬 Conversas")
 
@@ -173,7 +128,6 @@ with st.sidebar:
             if st.button(f"{ativo}{conv['title']}", key=f"load_{conv['id']}", use_container_width=True):
                 st.session_state.current_conv_id = conv["id"]
                 st.rerun()
-
             col_rename, col_delete = st.columns([1, 1])
             with col_rename:
                 if st.button("✏️ Renomear", key=f"rename_{conv['id']}", use_container_width=True):
@@ -184,7 +138,6 @@ with st.sidebar:
                     if st.session_state.current_conv_id == conv["id"]:
                         st.session_state.current_conv_id = None
                     st.rerun()
-
             if st.session_state.get(f"renaming_{conv['id']}", False):
                 with st.expander("Renomear conversa", expanded=True):
                     new_name = st.text_input("Novo nome:", value=conv["title"], key=f"input_{conv['id']}")
@@ -199,10 +152,9 @@ with st.sidebar:
                             st.session_state[f"renaming_{conv['id']}"] = False
                             st.rerun()
 
-                st.caption(f"👁️ Modelo de visão detectado: {modelo_visao_disponivel() or 'NENHUM na sua conta'}")
-
-            st.divider()
+    st.divider()
     st.subheader("📎 Arquivos")
+    st.caption(f"👁️ Modelo de visão: {modelo_visao_disponivel() or 'NENHUM na conta'}")
     upload = st.file_uploader("PDF, TXT ou imagem", type=["pdf", "txt", "png", "jpg", "jpeg"], label_visibility="collapsed")
 
     if upload is not None:
@@ -237,24 +189,23 @@ with st.sidebar:
         st.session_state.imagem = None
         st.rerun()
 
-        st.divider()
+    st.divider()
     conv_atual = next((c for c in st.session_state.conversations if c["id"] == st.session_state.current_conv_id), None)
     if conv_atual and conv_atual.get("messages"):
         linhas = []
         for m in conv_atual["messages"]:
             quem = "👤 Você" if m["role"] == "user" else "🤖 IA"
             linhas.append(f"{quem}: {m['content']}")
-        txt_export = "\n\n".join(linhas)
         st.download_button(
             "📥 Exportar conversa (TXT)",
-            data=txt_export,
+            data="\n\n".join(linhas),
             file_name=f"conversa-{conv_atual['id']}.txt",
             mime="text/plain",
             use_container_width=True
         )
 
     st.divider()
-    st.caption("Feito com SysNext Desenvolvimento🚀")
+    st.caption("Feito com Streamlit + Groq 🚀")
 
 # --- PROMPTS ---
 prompts = {
@@ -277,13 +228,13 @@ else:
     st.session_state.messages = []
     system_prompt = prompts[persona]
 
-if st.session_state.get("aviso_visao"):
-    st.error("⚠️ Sua conta Groq não tem nenhum modelo de visão disponível agora, então a imagem foi ignorada. Abaixo, na sidebar, aparece o nome do modelo de visão detectado (ou 'nenhum').")
-
-# --- REGRA DE IDIOMA (responde no idioma de quem perguntou) ---
+# --- REGRA DE IDIOMA ---
 system_prompt += " Detecte o idioma da mensagem do usuário e responda exatamente no mesmo idioma, a menos que ele peça outro idioma."
 
 # --- TÍTULO ---
+if st.session_state.get("aviso_visao"):
+    st.error("⚠️ Sua conta Groq não tem nenhum modelo de visão disponível agora, então a imagem foi ignorada. Veja na sidebar o nome do modelo detectado (ou 'NENHUM').")
+
 if st.session_state.current_conv_id and current_conv:
     st.title(f"💬 {current_conv['title']}")
     st.caption(f"🎭 {current_conv.get('persona', persona)} • 📊 {len(st.session_state.messages)} mensagens")
@@ -295,15 +246,12 @@ else:
 for idx, message in enumerate(st.session_state.messages):
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
-
         if message["role"] == "assistant":
             st.divider()
             col_btn1, col_btn2 = st.columns(2)
-
-            # === BOTÃO OUVIR ===
             with col_btn1:
                 texto_escape = message["content"].replace("'", "\\'").replace('"', '\\"').replace("\n", "\\n").replace("\r", "")
-                html_ouvir = f"""
+                components.html(f"""
                 <style>body {{ margin: 0; padding: 0; background: transparent; }}</style>
                 <button class="btn-neutro" onclick="falar()">🔊 Ouvir</button>
                 <script>
@@ -317,13 +265,9 @@ for idx, message in enumerate(st.session_state.messages):
                     window.speechSynthesis.speak(u);
                 }}
                 </script>
-                """
-                components.html(html_ouvir, height=50, width=130, scrolling=False)
-
-            # === BOTÃO COPIAR ===
+                """, height=50, width=130, scrolling=False)
             with col_btn2:
-                texto_escape = message["content"].replace("'", "\\'").replace('"', '\\"').replace("\n", "\\n").replace("\r", "")
-                html_copiar = f"""
+                components.html(f"""
                 <style>body {{ margin: 0; padding: 0; background: transparent; }}</style>
                 <button id="btn" class="btn-neutro" onclick="copiar()">📋 Copiar</button>
                 <script>
@@ -335,23 +279,7 @@ for idx, message in enumerate(st.session_state.messages):
                     }});
                 }}
                 </script>
-                """
-                components.html(html_copiar, height=50, width=130, scrolling=False)
-
-# --- DETECÇÃO AUTOMÁTICA DE MODELO DE VISÃO ---
-@st.cache_data(ttl=3600)
-def modelo_visao_disponivel():
-    try:
-        c = Groq(api_key=st.secrets["GROQ_API_KEY"])
-        ids = [m.id for m in c.models.list()]
-        prefs = ["llama-4-scout", "llama-4-maverick", "scout-17b-16e", "maverick-17b-128e", "vision", "llama-3.2-90b-vision", "llama-3.2-11b-vision", "pixtral"]
-        for p in prefs:
-            for mid in ids:
-                if p in mid:
-                    return mid
-        return None
-    except Exception:
-        return None
+                """, height=50, width=130, scrolling=False)
 
 # --- BUSCA WEB ---
 def pesquisar_na_web(consulta):
@@ -394,13 +322,11 @@ if prompt := st.chat_input("Digite sua mensagem..."):
             status.update(label="✅ Busca concluída!", state="complete", expanded=False)
             mensagem_para_ia = f"Use este contexto da web para responder:\n{contexto}\n\nPergunta: {prompt}"
 
-    # Anexa documento (PDF/TXT) como contexto
     if st.session_state.documento:
         doc = st.session_state.documento
         texto_doc = doc["texto"][:15000]
         mensagem_para_ia = f"Use o conteúdo do documento '{doc['nome']}' abaixo para responder:\n\n---INÍCIO DO DOCUMENTO---\n{texto_doc}\n---FIM DO DOCUMENTO---\n\nPergunta: {mensagem_para_ia}"
 
-    # Define o modelo (visão para imagens) e o conteúdo da mensagem
     modelo = "openai/gpt-oss-120b"
     conteudo_usuario = mensagem_para_ia
     if st.session_state.imagem:
