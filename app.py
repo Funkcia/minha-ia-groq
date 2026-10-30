@@ -16,7 +16,7 @@ except Exception:
 
 # ================= IDENTIDADE =================
 NOME_IA = "Nexa"   # ← troque o nome da sua IA aqui (1 linha só)
-ICONE_URL = "https://raw.githubusercontent.com/Funkcia/minha-ia-groq/main/nexa.png"
+ICONE_URL = "https://raw.githubusercontent.com/Funkcia/minha-ia-groq/main/nexa.svg"
 # Sem o nexa.png no repo? Troque a linha acima por:  ICONE_URL = "🤖"
 
 st.set_page_config(page_title=f"{NOME_IA}-IA", page_icon=ICONE_URL, layout="wide")
