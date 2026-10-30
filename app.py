@@ -328,7 +328,7 @@ with st.sidebar:
                     st.rerun()
         with col_mc:
             if st.button("🧹 Limpar", use_container_width=True, key="mem_clear_btn"):
-                if salvar_memoria("")):
+                if salvar_memoria(""):
                     st.session_state["msg_memoria"] = "🧹 Memória apagada."
                     st.rerun()
     if st.button("🧠 Consolidar memória com a conversa atual", use_container_width=True, key="mem_consolidar_btn"):
