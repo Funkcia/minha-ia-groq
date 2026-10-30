@@ -14,15 +14,20 @@ try:
 except Exception:
     create_client = None
 
-st.set_page_config(page_title="Minha IA Pessoal", page_icon="🤖", layout="wide")
+# ================= IDENTIDADE =================
+NOME_IA = "Nexa"   # ← troque o nome da sua IA aqui (1 linha só)
+ICONE_URL = "https://raw.githubusercontent.com/Funkcia/minha-ia-groq/main/nexa.png"
+# Sem o nexa.png no repo? Troque a linha acima por:  ICONE_URL = "🤖"
+
+st.set_page_config(page_title=f"{NOME_IA} · Minha IA Pessoal", page_icon=ICONE_URL, layout="wide")
 
 for chave, valor in [("conversations", []), ("current_conv_id", None), ("documento", None),
-                     ("imagem", None), ("erro_gemini", None), ("erro_sb", None),
+                     ("imagem", None), ("erro_gemini", None), ("erro_sb", None), ("msg_memoria", None),
                      ("hash_audio_ultimo", None), ("_sb_carregado", False)]:
     if chave not in st.session_state:
         st.session_state[chave] = valor
 
-# ================= SUPABASE (opt-in: só liga com as 3 chaves nos Secrets) =================
+# ================= SUPABASE (opt-in) =================
 def sb():
     if create_client is None:
         return None
@@ -101,7 +106,84 @@ if not st.session_state["_sb_carregado"]:
     st.session_state["_sb_carregado"] = True
     carregar_sb()
 
-# ================= VISÃO (Gemini 3.8 = nome que a Google indicou) =================
+# ================= MEMÓRIA DE LONGO PRAZO =================
+def ler_memoria():
+    c = sb()
+    if not c:
+        return ""
+    try:
+        r = c.table("memoria").select("conteudo").eq("owner", owner_token()).execute()
+        if r.data and r.data[0].get("conteudo"):
+            return r.data[0]["conteudo"]
+    except Exception as e:
+        st.session_state["erro_sb"] = f"Erro lendo memória: {e}"
+    return ""
+
+def salvar_memoria(texto):
+    c = sb()
+    if not c:
+        return False
+    try:
+        c.table("memoria").upsert({
+            "owner": owner_token(), "conteudo": texto,
+            "atualizado_em": datetime.utcnow().isoformat()
+        }, on_conflict="owner").execute()
+        return True
+    except Exception as e:
+        st.session_state["erro_sb"] = f"Falha salvando memória: {e}"
+        return False
+
+_cache_mem = {"val": None}
+def memoria_atual():
+    if _cache_mem["val"] is None:
+        _cache_mem["val"] = ler_memoria()
+    return _cache_mem["val"]
+
+def consolidar_memoria(fonte):
+    c = sb()
+    if not c:
+        return None, "Supabase desligado — ligue para usar a memória de longo prazo."
+    fonte = (fonte or "").strip()
+    if not fonte:
+        return None, "Nada para consolidar (conversa vazia)."
+    mem_atual = ler_memoria() or "(vazia)"
+    prompt_consolida = (
+        "Você mantém a MEMÓRIA DE LONGO PRAZO de um usuário.\n\n"
+        f"MEMÓRIA ATUAL:\n{mem_atual}\n\n"
+        f"NOVA INFORMAÇÃO:\n{fonte}\n\n"
+        "Regras: extraia APENAS fatos duráveis e úteis sobre o usuário (quem ele é, preferências, "
+        "projetos, contexto pessoal/profissional, como gosta das respostas). Ignore conteúdo efêmero da conversa. "
+        "Misture com a memória atual sem duplicar e sem contradizer. Responda SOMENTE com o texto final da memória, "
+        "em português, em tópicos curtos, com no máximo 1500 caracteres. Não escreva introduções nem 'Claro'."
+    )
+    try:
+        cl = Groq(api_key=st.secrets["GROQ_API_KEY"])
+        resp = cl.chat.completions.create(
+            model="openai/gpt-oss-120b",
+            messages=[{"role": "user", "content": prompt_consolida}],
+            temperature=0.3, max_tokens=600
+        )
+        novo = (resp.choices[0].message.content or "").strip()
+        if not novo:
+            return None, "A IA retornou memória vazia."
+        if salvar_memoria(novo):
+            _cache_mem["val"] = novo
+            return novo, None
+        return None, st.session_state.get("erro_sb") or "Falha ao gravar memória."
+    except Exception as e:
+        return None, f"Erro consolidando memória: {e}"
+
+def montar_fonte_conversa():
+    conv = next((c for c in st.session_state.conversations if c["id"] == st.session_state.current_conv_id), None)
+    if not conv or not conv.get("messages"):
+        return ""
+    partes = []
+    for m in conv["messages"][-20:]:
+        quem = "Usuário" if m["role"] == "user" else "IA"
+        partes.append(f"{quem}: {m['content']}")
+    return "\n".join(partes)[:6000]
+
+# ================= VISÃO =================
 def visao_config():
     if st.secrets.get("GEMINI_API_KEY"):
         return "gemini", None
@@ -154,7 +236,7 @@ def chamar_gemini(imagem_bytes, prompt_final):
         return None, "⏳ Limite da camada grátis da Google atingido (429). Espere ~1 min e tente de novo."
     return None, "  •  ".join(erros)
 
-# ================= CSS (temas + upload claro + chips do topo) =================
+# ================= CSS =================
 st.markdown("""
 <style>
 .btn-neutro { background: transparent; border: 1px solid #8b949e; border-radius: 6px; padding: 8px 16px; cursor: pointer; font-size: 14px; width: 100%; color: #8b949e; }
@@ -232,6 +314,39 @@ with st.sidebar:
                         if st.button("❌ Cancelar", key=f"cancel_{conv['id']}", use_container_width=True):
                             st.session_state[f"renaming_{conv['id']}"] = False
                             st.rerun()
+
+    st.divider()
+    st.subheader("🧠 Memória")
+    st.caption(f"A {NOME_IA} lembra de você entre as conversas.")
+    with st.expander("📖 Ver / editar memória", expanded=False):
+        mem_edited = st.text_area("Conteúdo salvo sobre você:", value=memoria_atual(), height=170, key="mem_edit")
+        col_ms, col_mc = st.columns(2)
+        with col_ms:
+            if st.button("💾 Salvar", use_container_width=True, key="mem_save_btn"):
+                if salvar_memoria(mem_edited):
+                    st.session_state["msg_memoria"] = "💾 Memória salva manualmente."
+                    st.rerun()
+        with col_mc:
+            if st.button("🧹 Limpar", use_container_width=True, key="mem_clear_btn"):
+                if salvar_memoria("")):
+                    st.session_state["msg_memoria"] = "🧹 Memória apagada."
+                    st.rerun()
+    if st.button("🧠 Consolidar memória com a conversa atual", use_container_width=True, key="mem_consolidar_btn"):
+        if not sb():
+            st.session_state["erro_sb"] = "Ligue o Supabase para usar a memória de longo prazo."
+            st.rerun()
+        fonte = montar_fonte_conversa()
+        if not fonte:
+            st.session_state["erro_sb"] = "Abra uma conversa com mensagens para consolidar."
+            st.rerun()
+        with st.spinner("🧠 Consolidando memória..."):
+            _, err = consolidar_memoria(fonte)
+        if err:
+            st.session_state["erro_sb"] = err
+        else:
+            st.session_state["msg_memoria"] = "🧠 Memória de longo prazo atualizada com esta conversa."
+        st.rerun()
+
     st.divider()
     st.subheader("📎 Arquivos")
     tipo_v, mot_v = visao_config()
@@ -278,9 +393,9 @@ with st.sidebar:
             linhas.append(f"{quem}: {m['content']}")
         st.download_button("📥 Exportar conversa (TXT)", data="\n\n".join(linhas), file_name=f"conversa-{conv_atual['id']}.txt", mime="text/plain", use_container_width=True)
     st.divider()
-    st.caption("Feito com Streamlit + Groq 🚀")
+    st.caption(f"Feito com {NOME_IA} · SysNext Desenvolvimento 🚀")
 
-# ================= PROMPTS / CONVERSA ATUAL =================
+# ================= PROMPTS / CONVERSA =================
 prompts = {
     "Assistente Padrão": "Você é um assistente útil, direto e fala português brasileiro.",
     "Professor Didático": "Você é um professor paciente e didático. Explica conceitos complexos de forma simples. Fala português brasileiro.",
@@ -300,19 +415,30 @@ else:
     system_prompt = prompts[persona]
 system_prompt += " Detecte o idioma da mensagem do usuário e responda exatamente no mesmo idioma, a menos que ele peça outro idioma."
 
+_mem = memoria_atual()
+if _mem:
+    system_prompt += (
+        "\n\n=== MEMÓRIA DE LONGO PRAZO SOBRE O USUÁRIO ===\n" + _mem +
+        "\n=== FIM ===\nUse esses fatos para personalizar naturalmente. "
+        "Não os recite literalmente nem mencione que possui memória, salvo se o usuário perguntar o que você sabe sobre ele."
+    )
+
 if st.session_state.get("erro_sb"):
     st.warning(f"⚠️ {st.session_state['erro_sb']}")
 if st.session_state.get("erro_gemini"):
     st.error(f"❌ {st.session_state['erro_gemini']}")
+if st.session_state.get("msg_memoria"):
+    st.info(st.session_state["msg_memoria"])
+    st.session_state["msg_memoria"] = None
 
 if st.session_state.current_conv_id and current_conv:
     st.title(f"💬 {current_conv['title']}")
     st.caption(f"🎭 {current_conv.get('persona', persona)} • 📊 {len(st.session_state.messages)} mensagens")
 else:
-    st.title("🤖 Minha IA Pessoal")
-    st.info("👈 Clique em **Nova Conversa** ou fale/digite sua primeira mensagem abaixo!")
+    st.title(f"🤖 {NOME_IA}")
+    st.info(f"👈 Eu sou a {NOME_IA}. Clique em **Nova Conversa** ou fale/digite sua primeira mensagem abaixo!")
 
-# ================= HISTÓRICO (com imagem inline) =================
+# ================= HISTÓRICO =================
 for idx, message in enumerate(st.session_state.messages):
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
@@ -384,6 +510,17 @@ else:
 # ================= GERAR RESPOSTA =================
 if prompt:
     st.session_state["erro_gemini"] = None
+    _gatilhos = ["lembre-se", "lembre se", "lembre que", "lembra que", "anote que", "anote:", "memória:", "memoria:", "grave que", "guarde que"]
+    if any(g in prompt.lower() for g in _gatilhos):
+        if sb():
+            _, _err = consolidar_memoria(prompt)
+            if _err:
+                st.session_state["erro_sb"] = _err
+            else:
+                st.session_state["msg_memoria"] = "🧠 Anotado na memória de longo prazo."
+        else:
+            st.session_state["erro_sb"] = "Gatilho de memória detectado, mas o Supabase está desligado."
+
     if not st.session_state.current_conv_id:
         new_conv = {"id": datetime.now().strftime("%Y%m%d_%H%M%S"), "title": prompt[:30] + "..." if len(prompt) > 30 else prompt, "messages": [], "persona": persona}
         st.session_state.conversations.append(new_conv)
