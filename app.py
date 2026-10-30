@@ -19,7 +19,7 @@ NOME_IA = "Nexa"   # ← troque o nome da sua IA aqui (1 linha só)
 ICONE_URL = "https://raw.githubusercontent.com/Funkcia/minha-ia-groq/main/nexa.png"
 # Sem o nexa.png no repo? Troque a linha acima por:  ICONE_URL = "🤖"
 
-st.set_page_config(page_title=f"{NOME_IA} · Minha IA Pessoal", page_icon=ICONE_URL, layout="wide")
+st.set_page_config(page_title=f"{NOME_IA}-IA", page_icon=ICONE_URL, layout="wide")
 
 for chave, valor in [("conversations", []), ("current_conv_id", None), ("documento", None),
                      ("imagem", None), ("erro_gemini", None), ("erro_sb", None), ("msg_memoria", None),
