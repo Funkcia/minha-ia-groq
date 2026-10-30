@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Logo Nexa">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0B1B3A"/>
+      <stop offset="1" stop-color="#123061"/>
+    </linearGradient>
+    <radialGradient id="sheen" cx="0.5" cy="0.32" r="0.75">
+      <stop offset="0" stop-color="#7DD3FC" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#7DD3FC" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="mark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0"   stop-color="#22D3EE"/>
+      <stop offset="0.5" stop-color="#38BDF8"/>
+      <stop offset="1"   stop-color="#818CF8"/>
+    </linearGradient>
+    <linearGradient id="node" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#A5F3FC"/>
+      <stop offset="1" stop-color="#C7D2FE"/>
+    </linearGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="9" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="b"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- placa de fundo, cantos arredondados (herança do seu M / SysNext) -->
+  <rect x="0" y="0" width="512" height="512" rx="112" ry="112" fill="url(#bg)"/>
+  <rect x="0" y="0" width="512" height="512" rx="112" ry="112" fill="url(#sheen)"/>
+
+  <!-- halo dos dois nós do elo (a conexão que brilha) -->
+  <g filter="url(#glow)" opacity="0.7">
+    <circle cx="132" cy="374" r="32" fill="url(#node)"/>
+    <circle cx="380" cy="138" r="32" fill="url(#node)"/>
+  </g>
+
+  <!-- o N como caminho de rede: haste |  diagonal \  haste | -->
+  <path d="M132 138 L132 374 L380 138 L380 374"
+        fill="none" stroke="url(#mark)" stroke-width="42"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- nós das pontas -->
+  <circle cx="132" cy="138" r="28" fill="url(#mark)"/>
+  <circle cx="380" cy="374" r="28" fill="url(#mark)"/>
+
+  <!-- nós do elo, em destaque (= nexus) -->
+  <circle cx="132" cy="374" r="34" fill="url(#node)"/>
+  <circle cx="380" cy="138" r="34" fill="url(#node)"/>
+</svg>
